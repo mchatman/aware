@@ -1,255 +1,173 @@
 import AppKit
-import QuartzCore
 import SwiftUI
 
-/// Manages the borderless panel that sits at the notch and reacts to agent events.
+// MARK: - Notch Window
+
+class NotchPanel: NSPanel {
+    override init(
+        contentRect: NSRect,
+        styleMask: NSWindow.StyleMask,
+        backing: NSWindow.BackingStoreType,
+        defer flag: Bool
+    ) {
+        super.init(
+            contentRect: contentRect,
+            styleMask: styleMask,
+            backing: backing,
+            defer: flag)
+
+        self.isFloatingPanel = true
+        self.isOpaque = false
+        self.titleVisibility = .hidden
+        self.titlebarAppearsTransparent = true
+        self.backgroundColor = .clear
+        self.isMovable = false
+
+        self.collectionBehavior = [
+            .fullScreenAuxiliary,
+            .stationary,
+            .canJoinAllSpaces,
+            .ignoresCycle,
+        ]
+
+        self.isReleasedWhenClosed = false
+        self.level = .mainMenu + 3
+        self.hasShadow = false
+    }
+
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
+// MARK: - Notch Controller
+
 @MainActor
 final class NotchController {
     static let shared = NotchController()
 
-    private var window: NSPanel?
-    private var hostingView: NSHostingView<NotchView>?
-    private var trackingArea: NSTrackingArea?
-
-    private let state = NotchState.shared
+    private var window: NSWindow?
+    private let vm = NotchViewModel()
     private let logger = Logger(subsystem: "ai.openclaw", category: "notch")
 
-    // MARK: - Layout
-
-    /// How far below the top of the visible area (below menu bar) the pill sits.
-    private let topInset: CGFloat = 4
-    /// Extra hit-test padding around the panel for hover detection.
-    private let hoverPadding: CGFloat = 20
-
-    // MARK: - Lifecycle
-
     func setup() {
-        self.ensureWindow()
-        self.observeWorkActivity()
-        self.observeControlChannel()
+        self.showNotchWindow()
+        self.observeGateway()
         self.logger.info("notch controller setup complete")
     }
 
-    func show() {
-        self.ensureWindow()
-        self.state.isVisible = true
-        self.updateView()
-        guard let window else { return }
+    // MARK: - Window
 
-        let target = self.targetFrame()
-        let start = NSRect(
-            x: target.origin.x,
-            y: target.origin.y + 4, // Slide down from above
-            width: target.width,
-            height: target.height)
+    private func showNotchWindow() {
+        let selectedScreen = NSScreen.main ?? NSScreen.screens.first!
 
-        window.setFrame(start, display: true)
-        window.alphaValue = 0
-        window.orderFrontRegardless()
+        self.vm.screen = selectedScreen.localizedName
+        self.vm.notchSize = ScreenMetrics.closedNotchSize(screenName: selectedScreen.localizedName)
 
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            window.animator().setFrame(target, display: true)
-            window.animator().alphaValue = 1
+        let window = self.createNotchWindow(for: selectedScreen)
+        self.window = window
+        self.positionWindow(window, on: selectedScreen, changeAlpha: true)
+
+        if self.vm.notchState == .closed {
+            self.vm.close()
         }
     }
 
-    func hide() {
-        guard let window else { return }
-
-        let frame = window.frame
-        let target = NSRect(
-            x: frame.origin.x,
-            y: frame.origin.y + 4,
-            width: frame.width,
-            height: frame.height)
-
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.15
-            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            window.animator().setFrame(target, display: true)
-            window.animator().alphaValue = 0
-        } completionHandler: {
-            Task { @MainActor in
-                window.orderOut(nil)
-                self.state.isVisible = false
-            }
-        }
-    }
-
-    func updateLayout(animate: Bool = true) {
-        guard let window else { return }
-        let frame = self.targetFrame()
-        if animate {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.3
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                window.animator().setFrame(frame, display: true)
-            }
-        } else {
-            window.setFrame(frame, display: true)
-        }
-    }
-
-    // MARK: - Window setup
-
-    private func ensureWindow() {
-        if self.window != nil { return }
-
-        let frame = self.targetFrame()
-        let panel = NSPanel(
-            contentRect: frame,
-            styleMask: [.nonactivatingPanel, .borderless],
+    private func createNotchWindow(for screen: NSScreen) -> NSWindow {
+        let window = NotchPanel(
+            contentRect: NSRect(
+                x: 0, y: 0,
+                width: ScreenMetrics.openNotchSize.width,
+                height: ScreenMetrics.openNotchSize.height),
+            styleMask: [.borderless, .nonactivatingPanel, .utilityWindow, .hudWindow],
             backing: .buffered,
             defer: false)
 
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.level = .statusBar + 1 // Above the menu bar
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        panel.hidesOnDeactivate = false
-        panel.isMovable = false
-        panel.isFloatingPanel = true
-        panel.becomesKeyOnlyIfNeeded = true
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.ignoresMouseEvents = false
+        window.contentView = NSHostingView(
+            rootView: NotchContentView()
+                .environmentObject(self.vm))
 
-        let view = NotchView(
-            state: self.state,
-            onTap: { [weak self] in self?.handleTap() },
-            onDismiss: { [weak self] in self?.handleDismiss() })
-        let host = NSHostingView(rootView: view)
-        host.translatesAutoresizingMaskIntoConstraints = false
-        panel.contentView = host
-        self.hostingView = host
-        self.window = panel
-
-        self.logger.info("notch window created")
+        window.orderFrontRegardless()
+        return window
     }
 
-    private func updateView() {
-        let view = NotchView(
-            state: self.state,
-            onTap: { [weak self] in self?.handleTap() },
-            onDismiss: { [weak self] in self?.handleDismiss() })
-        self.hostingView?.rootView = view
-    }
-
-    // MARK: - Positioning
-
-    /// Calculates the frame centered at the top of the visible area, just below the menu bar.
-    private func targetFrame() -> NSRect {
-        guard let screen = NSScreen.main else {
-            return NSRect(x: 0, y: 0, width: 200, height: 32)
+    private func positionWindow(_ window: NSWindow, on screen: NSScreen, changeAlpha: Bool = false) {
+        if changeAlpha {
+            window.alphaValue = 0
         }
 
-        let visible = screen.visibleFrame
-        let fullFrame = screen.frame
-
-        // The notch pill width/height depends on current expansion
-        let pillWidth: CGFloat = {
-            switch self.state.expansion {
-            case .collapsed: return 200
-            case .compact: return 260
-            case .expanded: return 360
-            }
-        }()
-
-        let pillHeight: CGFloat = {
-            switch self.state.expansion {
-            case .collapsed: return 32
-            case .compact: return 40
-            case .expanded: return 280
-            }
-        }()
-
-        // Center horizontally on the full screen (aligns with notch)
-        let x = fullFrame.midX - (pillWidth / 2)
-        // Anchor to the top of the visible frame (just below the menu bar)
-        let y = visible.maxY - pillHeight - self.topInset
-
-        return NSRect(x: x, y: y, width: pillWidth, height: pillHeight)
+        DispatchQueue.main.async { [weak window] in
+            guard let window else { return }
+            let screenFrame = screen.frame
+            window.setFrameOrigin(
+                NSPoint(
+                    x: screenFrame.origin.x + (screenFrame.width / 2) - window.frame.width / 2,
+                    y: screenFrame.origin.y + screenFrame.height - window.frame.height))
+            window.alphaValue = 1
+        }
     }
 
-    // MARK: - Event observation
+    // MARK: - Gateway observation
 
-    private func observeWorkActivity() {
-        // Poll WorkActivityStore for changes and route to notch state.
-        // In production, this would use Observation framework or NotificationCenter.
+    private func observeGateway() {
+        Task { [weak self] in
+            var lastState: ControlChannel.ConnectionState?
+            while !Task.isCancelled {
+                guard let self else { return }
+                let current = ControlChannel.shared.state
+
+                if current != lastState {
+                    lastState = current
+                    let status: String
+                    switch current {
+                    case .connected: status = "connected"
+                    case .connecting: status = "connecting"
+                    default: status = "disconnected"
+                    }
+
+                    NotificationCenter.default.post(
+                        name: .notchAgentUpdate,
+                        object: nil,
+                        userInfo: ["connectionStatus": status])
+                }
+
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
+
+        // Observe agent work activity for transcript/tool updates
         Task { [weak self] in
             var lastIconState: IconState?
             while !Task.isCancelled {
-                guard let self else { return }
+                guard self != nil else { return }
                 let store = WorkActivityStore.shared
                 let iconState = store.iconState
                 let activity = store.current
 
                 if iconState != lastIconState {
                     lastIconState = iconState
+
+                    var userInfo: [String: Any] = [:]
+
                     switch iconState {
                     case .idle:
-                        if self.state.phase != .idle {
-                            self.state.finishActivity()
+                        userInfo["isListening"] = false
+                        userInfo["isSpeaking"] = false
+                    case .workingMain, .workingOther, .overridden:
+                        userInfo["isListening"] = true
+                        if let label = activity?.label {
+                            userInfo["transcript"] = "Working: \(label)"
+                            userInfo["isSpeaking"] = true
                         }
-                    case .workingMain(let kind), .workingOther(let kind), .overridden(let kind):
-                        let label = activity?.label ?? Self.activityLabel(kind)
-                        self.state.beginThinking(tool: label)
-                        if !self.state.isVisible {
-                            self.show()
-                        }
-                        self.updateLayout()
                     }
+
+                    NotificationCenter.default.post(
+                        name: .notchAgentUpdate,
+                        object: nil,
+                        userInfo: userInfo)
                 }
 
-                try? await Task.sleep(nanoseconds: 250_000_000) // 250ms
+                try? await Task.sleep(nanoseconds: 250_000_000)
             }
         }
-    }
-
-    private func observeControlChannel() {
-        Task { [weak self] in
-            var lastState: ControlChannel.ConnectionState?
-            while !Task.isCancelled {
-                guard let self else { return }
-                let current = ControlChannel.shared.state
-                if current != lastState {
-                    lastState = current
-                    self.state.setConnected(current)
-                }
-                try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
-            }
-        }
-    }
-
-    // MARK: - Helpers
-
-    private static func activityLabel(_ kind: ActivityKind) -> String {
-        switch kind {
-        case .job: "working"
-        case .tool(let toolKind): toolKind.rawValue
-        }
-    }
-
-    // MARK: - Interaction
-
-    private func handleTap() {
-        switch self.state.expansion {
-        case .collapsed:
-            self.state.expansion = .compact
-            self.updateLayout()
-        case .compact:
-            self.state.expansion = .expanded
-            self.updateLayout()
-        case .expanded:
-            self.handleDismiss()
-        }
-    }
-
-    private func handleDismiss() {
-        self.state.collapse()
-        self.updateLayout()
     }
 }
