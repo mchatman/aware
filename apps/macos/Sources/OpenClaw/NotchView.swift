@@ -179,16 +179,12 @@ struct NotchView: View {
 
     private var background: some View {
         RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous)
-                    .fill(Color.black.opacity(0.3))
-            )
+            .fill(.regularMaterial)
     }
 
     private var border: some View {
         RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous)
-            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+            .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
     }
 
     private var shadowColor: Color {

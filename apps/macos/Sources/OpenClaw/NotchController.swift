@@ -16,10 +16,8 @@ final class NotchController {
 
     // MARK: - Layout
 
-    /// Width of the MacBook notch (approximate — the actual hardware notch is ~180pt on 14/16" models).
-    private let notchWidth: CGFloat = 200
-    /// How far below the top of the screen the pill sits (so it "hangs" from the notch).
-    private let topInset: CGFloat = 0
+    /// How far below the top of the visible area (below menu bar) the pill sits.
+    private let topInset: CGFloat = 4
     /// Extra hit-test padding around the panel for hover detection.
     private let hoverPadding: CGFloat = 20
 
@@ -142,14 +140,14 @@ final class NotchController {
 
     // MARK: - Positioning
 
-    /// Calculates the frame centered at the top of the screen, right below the notch.
+    /// Calculates the frame centered at the top of the visible area, just below the menu bar.
     private func targetFrame() -> NSRect {
         guard let screen = NSScreen.main else {
             return NSRect(x: 0, y: 0, width: 200, height: 32)
         }
 
-        // Use the full screen frame (not visibleFrame) to position at the very top
-        let screenFrame = screen.frame
+        let visible = screen.visibleFrame
+        let fullFrame = screen.frame
 
         // The notch pill width/height depends on current expansion
         let pillWidth: CGFloat = {
@@ -168,9 +166,10 @@ final class NotchController {
             }
         }()
 
-        // Center horizontally, anchor to very top of screen
-        let x = screenFrame.midX - (pillWidth / 2)
-        let y = screenFrame.maxY - pillHeight - self.topInset
+        // Center horizontally on the full screen (aligns with notch)
+        let x = fullFrame.midX - (pillWidth / 2)
+        // Anchor to the top of the visible frame (just below the menu bar)
+        let y = visible.maxY - pillHeight - self.topInset
 
         return NSRect(x: x, y: y, width: pillWidth, height: pillHeight)
     }
