@@ -6,11 +6,6 @@ struct NotchContentView: View {
     @EnvironmentObject var vm: NotchViewModel
 
     @State private var hoverWorkItem: DispatchWorkItem?
-    @State private var transcript: String = ""
-    @State private var connectionStatus: NotchConnectionStatus = .disconnected
-    @State private var isListening: Bool = false
-    @State private var isSpeaking: Bool = false
-    @State private var audioLevel: Float = 0.0
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -42,9 +37,6 @@ struct NotchContentView: View {
             color: self.vm.notchState == .open ? .black.opacity(0.2) : .clear,
             radius: 6)
         .environmentObject(self.vm)
-        .onReceive(NotificationCenter.default.publisher(for: .notchAgentUpdate)) { notification in
-            self.handleAgentUpdate(notification)
-        }
     }
 
     @ViewBuilder
@@ -67,12 +59,7 @@ struct NotchContentView: View {
             .zIndex(2)
 
             if self.vm.notchState == .open {
-                NotchHomeView(
-                    transcript: self.transcript,
-                    connectionStatus: self.connectionStatus,
-                    isListening: self.isListening,
-                    isSpeaking: self.isSpeaking,
-                    audioLevel: self.audioLevel)
+                NotchHomeView()
                     .zIndex(1)
             }
         }
@@ -95,36 +82,6 @@ struct NotchContentView: View {
             if self.vm.notchState == .open {
                 self.vm.close()
             }
-        }
-    }
-
-    // MARK: - Agent Events
-
-    private func handleAgentUpdate(_ notification: Notification) {
-        guard let info = notification.userInfo else { return }
-
-        if let status = info["connectionStatus"] as? String {
-            switch status {
-            case "connected": self.connectionStatus = .connected
-            case "connecting": self.connectionStatus = .connecting
-            default: self.connectionStatus = .disconnected
-            }
-        }
-
-        if let text = info["transcript"] as? String {
-            self.transcript = text
-        }
-
-        if let speaking = info["isSpeaking"] as? Bool {
-            self.isSpeaking = speaking
-        }
-
-        if let listening = info["isListening"] as? Bool {
-            self.isListening = listening
-        }
-
-        if let level = info["audioLevel"] as? Float {
-            self.audioLevel = level
         }
     }
 }
@@ -167,19 +124,15 @@ struct NotchHeaderView: View {
 struct NotchHomeView: View {
     @EnvironmentObject var vm: NotchViewModel
 
-    let transcript: String
-    let connectionStatus: NotchConnectionStatus
-    let isListening: Bool
-    let isSpeaking: Bool
-    let audioLevel: Float
-
     var body: some View {
+        let connStatus = self.vm.parsedConnectionStatus
+
         VStack(spacing: 0) {
             // Top section: status + wave + controls
             HStack(spacing: 12) {
-                // Connection status
+                // Connection status + agent phase
                 HStack(spacing: 8) {
-                    let statusColor = self.connectionStatusColor
+                    let statusColor = self.connectionStatusColor(connStatus)
                     ZStack {
                         Circle().fill(statusColor).frame(width: 12, height: 12)
                             .blur(radius: 3).opacity(0.18)
@@ -188,18 +141,19 @@ struct NotchHomeView: View {
                         Circle().fill(statusColor).frame(width: 12, height: 12)
                     }
 
-                    Text(self.connectionStatusText)
-                        .font(.system(size: 16, weight: .regular))
+                    Text(self.statusText(connStatus))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(1)
                 }
 
                 Spacer()
 
                 // Wave visualization
                 SmoothWaveView(
-                    isAnimating: self.shouldAnimate,
-                    state: self.smoothWaveState,
-                    audioLevel: self.audioLevel)
+                    isAnimating: connStatus != .disconnected,
+                    state: self.smoothWaveState(connStatus),
+                    audioLevel: 0)
                     .frame(height: 30)
                     .mask(
                         LinearGradient(
@@ -214,14 +168,11 @@ struct NotchHomeView: View {
 
                 Spacer()
 
-                // Mic button
-                Button(action: {}) {
-                    Image(systemName: self.isListening ? "mic.fill" : "mic.slash.fill")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(PlainButtonStyle())
+                // Phase icon
+                self.phaseIcon
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                    .frame(width: 24, height: 24)
             }
             .padding(.horizontal, 20)
             .frame(height: 60)
@@ -238,28 +189,69 @@ struct NotchHomeView: View {
             }
             .frame(maxWidth: .infinity)
 
-            // Transcript
-            ScrollView {
-                if !self.transcript.isEmpty {
-                    HStack(alignment: .top, spacing: 14) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(red: 0.4, green: 0.6, blue: 1.0), lineWidth: 1)
-                                .frame(width: 36, height: 36)
-                                .blur(radius: 3).opacity(0.6)
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(red: 0.4, green: 0.6, blue: 1.0).opacity(0.5), lineWidth: 1)
-                                .frame(width: 36, height: 36)
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 18, weight: .medium))
-                                .foregroundColor(Color(red: 0.4, green: 0.6, blue: 1.0))
+            // Transcript area
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if !self.vm.transcript.isEmpty {
+                            HStack(alignment: .top, spacing: 14) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(self.accentColor, lineWidth: 1)
+                                        .frame(width: 36, height: 36)
+                                        .blur(radius: 3).opacity(0.6)
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(self.accentColor.opacity(0.5), lineWidth: 1)
+                                        .frame(width: 36, height: 36)
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundColor(self.accentColor)
+                                }
+
+                                TypewriterText(
+                                    fullText: self.vm.transcript,
+                                    isTyping: self.vm.agentPhase == .responding)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 20)
+                        } else if self.vm.agentPhase == .thinking {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .scaleEffect(0.8)
+                                Text("Thinking…")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white.opacity(0.6))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 20)
+                        } else if case let .toolUse(label) = self.vm.agentPhase {
+                            HStack(spacing: 8) {
+                                Image(systemName: "gearshape.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.orange.opacity(0.8))
+                                    .rotationEffect(.degrees(self.vm.agentPhase != .idle ? 360 : 0))
+                                    .animation(
+                                        .linear(duration: 2).repeatForever(autoreverses: false),
+                                        value: self.vm.agentPhase)
+                                Text(label)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white.opacity(0.7))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 20)
                         }
 
-                        TypewriterText(fullText: self.transcript, isTyping: self.isSpeaking)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        // Scroll anchor
+                        Color.clear.frame(height: 1).id("bottom")
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 20)
+                }
+                .onChange(of: self.vm.transcript) { _, _ in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    }
                 }
             }
             .frame(maxHeight: .infinity)
@@ -271,40 +263,56 @@ struct NotchHomeView: View {
 
     // MARK: - Computed
 
-    private var shouldAnimate: Bool {
-        self.connectionStatus != .disconnected
+    private var accentColor: Color {
+        Color(red: 0.4, green: 0.6, blue: 1.0)
     }
 
-    private var smoothWaveState: SmoothWaveView.VisualizationState {
-        switch self.connectionStatus {
-        case .disconnected: .idle
-        case .connecting: .connecting
-        case .connected:
-            if self.isSpeaking { .speaking }
-            else if self.isListening { .listening }
-            else { .idle }
+    @ViewBuilder
+    private var phaseIcon: some View {
+        switch self.vm.agentPhase {
+        case .idle:
+            Image(systemName: "moon.zzz.fill")
+        case .thinking:
+            Image(systemName: "brain")
+        case .toolUse:
+            Image(systemName: "gearshape.fill")
+        case .responding:
+            Image(systemName: "text.bubble.fill")
         }
     }
 
-    private var connectionStatusColor: Color {
-        switch self.connectionStatus {
+    private func smoothWaveState(_ connStatus: NotchConnectionStatus) -> SmoothWaveView.VisualizationState {
+        switch connStatus {
+        case .disconnected: .idle
+        case .connecting: .connecting
+        case .connected:
+            switch self.vm.agentPhase {
+            case .responding: .speaking
+            case .thinking, .toolUse: .listening
+            case .idle: .idle
+            }
+        }
+    }
+
+    private func connectionStatusColor(_ status: NotchConnectionStatus) -> Color {
+        switch status {
         case .connected: .green
         case .connecting: .gray
         case .disconnected: .red
         }
     }
 
-    private var connectionStatusText: String {
-        switch self.connectionStatus {
-        case .connected: "Connected"
-        case .connecting: "Connecting"
+    private func statusText(_ connStatus: NotchConnectionStatus) -> String {
+        switch connStatus {
         case .disconnected: "Disconnected"
+        case .connecting: "Connecting"
+        case .connected:
+            switch self.vm.agentPhase {
+            case .idle: "Connected"
+            case .thinking: "Thinking…"
+            case let .toolUse(label): label
+            case .responding: "Responding…"
+            }
         }
     }
-}
-
-// MARK: - Notification
-
-extension Notification.Name {
-    static let notchAgentUpdate = Notification.Name("openclaw.notch.agentUpdate")
 }

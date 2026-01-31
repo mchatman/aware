@@ -23,6 +23,11 @@ final class WorkActivityStore {
     private(set) var lastToolLabel: String?
     private(set) var lastToolUpdatedAt: Date?
 
+    /// Accumulated assistant response text for the current run.
+    private(set) var assistantText: String = ""
+    /// True while the agent is actively streaming a response.
+    private(set) var isStreaming: Bool = false
+
     private var jobs: [String: Activity] = [:]
     private var tools: [String: Activity] = [:]
     private var currentSessionKey: String?
@@ -36,6 +41,9 @@ final class WorkActivityStore {
     func handleJob(sessionKey: String, state: String) {
         let isStart = state.lowercased() == "started" || state.lowercased() == "streaming"
         if isStart {
+            // New agent run — clear accumulated text.
+            self.assistantText = ""
+            self.isStreaming = true
             let activity = Activity(
                 sessionKey: sessionKey,
                 role: self.role(for: sessionKey),
@@ -46,9 +54,15 @@ final class WorkActivityStore {
             self.setJobActive(activity)
         } else {
             // Job ended (done/error/aborted/etc). Clear everything for this session.
+            self.isStreaming = false
             self.clearTool(sessionKey: sessionKey)
             self.clearJob(sessionKey: sessionKey)
         }
+    }
+
+    func handleAssistantText(sessionKey: String, text: String) {
+        // data.text from the gateway is the full accumulated response, not a delta.
+        self.assistantText = text
     }
 
     func handleTool(

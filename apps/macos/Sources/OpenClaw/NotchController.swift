@@ -109,6 +109,9 @@ final class NotchController {
     // MARK: - Gateway observation
 
     private func observeGateway() {
+        let store = WorkActivityStore.shared
+
+        // Connection state polling (ControlChannel.state isn't yet push-observable)
         Task { [weak self] in
             var lastState: ControlChannel.ConnectionState?
             while !Task.isCancelled {
@@ -123,50 +126,53 @@ final class NotchController {
                     case .connecting: status = "connecting"
                     default: status = "disconnected"
                     }
-
-                    NotificationCenter.default.post(
-                        name: .notchAgentUpdate,
-                        object: nil,
-                        userInfo: ["connectionStatus": status])
+                    self.vm.connectionStatus = status
                 }
 
                 try? await Task.sleep(nanoseconds: 500_000_000)
             }
         }
 
-        // Observe agent work activity for transcript/tool updates
+        // Observe work activity + assistant text at 30fps for responsive UI
         Task { [weak self] in
             var lastIconState: IconState?
+            var lastTextLength = 0
+
             while !Task.isCancelled {
-                guard self != nil else { return }
-                let store = WorkActivityStore.shared
+                guard let self else { return }
+
                 let iconState = store.iconState
+                let text = store.assistantText
+                let isStreaming = store.isStreaming
                 let activity = store.current
 
-                if iconState != lastIconState {
+                let iconChanged = iconState != lastIconState
+                let textChanged = text.count != lastTextLength
+
+                if iconChanged || textChanged {
                     lastIconState = iconState
+                    lastTextLength = text.count
 
-                    var userInfo: [String: Any] = [:]
-
-                    switch iconState {
-                    case .idle:
-                        userInfo["isListening"] = false
-                        userInfo["isSpeaking"] = false
-                    case .workingMain, .workingOther, .overridden:
-                        userInfo["isListening"] = true
-                        if let label = activity?.label {
-                            userInfo["transcript"] = "Working: \(label)"
-                            userInfo["isSpeaking"] = true
+                    // Determine agent phase for notch display
+                    let phase: NotchAgentPhase
+                    if !text.isEmpty, isStreaming {
+                        phase = .responding
+                    } else if activity != nil {
+                        switch activity!.kind {
+                        case .job:
+                            phase = .thinking
+                        case .tool:
+                            phase = .toolUse(activity!.label)
                         }
+                    } else {
+                        phase = .idle
                     }
 
-                    NotificationCenter.default.post(
-                        name: .notchAgentUpdate,
-                        object: nil,
-                        userInfo: userInfo)
+                    self.vm.agentPhase = phase
+                    self.vm.transcript = text
                 }
 
-                try? await Task.sleep(nanoseconds: 250_000_000)
+                try? await Task.sleep(nanoseconds: 33_000_000) // ~30fps
             }
         }
     }

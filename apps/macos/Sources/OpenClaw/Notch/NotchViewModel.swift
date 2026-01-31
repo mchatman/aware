@@ -10,8 +10,25 @@ class NotchViewModel: ObservableObject {
     @Published var notchSize: CGSize = ScreenMetrics.closedNotchSize()
     @Published var closedNotchSize: CGSize = ScreenMetrics.closedNotchSize()
 
+    // MARK: - Agent State (set by NotchController)
+
+    /// Gateway connection status string: "connected", "connecting", "disconnected".
+    @Published var connectionStatus: String = "disconnected"
+    /// Current agent phase for display.
+    @Published var agentPhase: NotchAgentPhase = .idle
+    /// Accumulated assistant response text.
+    @Published var transcript: String = ""
+
     var effectiveClosedNotchHeight: CGFloat {
         self.closedNotchSize.height
+    }
+
+    var parsedConnectionStatus: NotchConnectionStatus {
+        switch self.connectionStatus {
+        case "connected": .connected
+        case "connecting": .connecting
+        default: .disconnected
+        }
     }
 
     init(screen: String? = nil) {
