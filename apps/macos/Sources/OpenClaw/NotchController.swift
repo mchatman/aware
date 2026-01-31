@@ -196,7 +196,7 @@ final class NotchController {
                             self.state.finishActivity()
                         }
                     case .workingMain(let kind), .workingOther(let kind), .overridden(let kind):
-                        let label = activity?.label ?? kind.rawValue
+                        let label = activity?.label ?? Self.activityLabel(kind)
                         self.state.beginThinking(tool: label)
                         if !self.state.isVisible {
                             self.show()
@@ -222,6 +222,15 @@ final class NotchController {
                 }
                 try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
             }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private static func activityLabel(_ kind: ActivityKind) -> String {
+        switch kind {
+        case .job: "working"
+        case .tool(let toolKind): toolKind.rawValue
         }
     }
 

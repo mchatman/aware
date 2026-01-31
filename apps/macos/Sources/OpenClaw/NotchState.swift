@@ -25,7 +25,7 @@ final class NotchState {
     // MARK: - Published state
 
     private(set) var phase: Phase = .idle
-    private(set) var expansion: ExpansionLevel = .collapsed
+    var expansion: ExpansionLevel = .collapsed
     private(set) var connectionState: ControlChannel.ConnectionState = .disconnected
     private(set) var responseText: String = ""
     private(set) var toolLabel: String?
