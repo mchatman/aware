@@ -270,12 +270,6 @@ struct NotchHomeView: View {
                 }
             }
 
-            // Action chips
-            HStack(spacing: 8) {
-                ActionChip(label: "ANALYSIS COMPLETE")
-                ActionChip(label: "DATA SYNC")
-            }
-            .padding(.leading, 44)
         }
         .padding(.horizontal, 18)
     }
@@ -320,31 +314,12 @@ struct NotchHomeView: View {
                     .fill(self.connectionStatusColor(connStatus))
                     .frame(width: 6, height: 6)
 
-                Text("System standby...")
+                Text(connStatus == .connected ? "Connected" : "Disconnected")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
             }
 
             Spacer()
-
-            Button(action: {
-                self.vm.close()
-            }) {
-                HStack(spacing: 4) {
-                    Text("DISMISS")
-                        .font(.system(size: 10, weight: .semibold))
-                        .tracking(0.5)
-                    Text("×")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundColor(.white.opacity(0.4))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 5)
-                        .stroke(Color.white.opacity(0.15), lineWidth: 1))
-            }
-            .buttonStyle(PlainButtonStyle())
         }
         .padding(.horizontal, 18)
         .padding(.bottom, 10)
