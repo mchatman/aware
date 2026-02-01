@@ -155,20 +155,21 @@ struct NotchHomeView: View {
             // 3. AI message / agent state
             self.aiMessageSection
                 .padding(.top, 12)
-                .padding(.bottom, 8)
-
-            Spacer(minLength: 4)
+                .padding(.bottom, 12)
 
             // 4. Bottom status bar
             self.bottomStatusBar(connStatus)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .background(self.bgColor)
-        .background(
+        .overlay(
             GeometryReader { geo in
                 Color.clear.preference(key: NotchContentHeightKey.self, value: geo.size.height)
             })
         .onPreferenceChange(NotchContentHeightKey.self) { height in
-            self.vm.updateContentHeight(height)
+            DispatchQueue.main.async {
+                self.vm.updateContentHeight(height)
+            }
         }
         .transition(.opacity)
     }
