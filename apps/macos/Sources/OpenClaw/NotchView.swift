@@ -1,14 +1,5 @@
 import SwiftUI
 
-// MARK: - Content Height Preference Key
-
-struct NotchContentHeightKey: PreferenceKey {
-    nonisolated(unsafe) static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
 // MARK: - Notch Content View
 
 struct NotchContentView: View {
@@ -162,14 +153,11 @@ struct NotchHomeView: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .background(self.bgColor)
-        .overlay(
-            GeometryReader { geo in
-                Color.clear.preference(key: NotchContentHeightKey.self, value: geo.size.height)
-            })
-        .onPreferenceChange(NotchContentHeightKey.self) { height in
-            DispatchQueue.main.async {
-                self.vm.updateContentHeight(height)
-            }
+        .onChange(of: self.vm.transcript) { _, _ in
+            self.vm.recalculateSize()
+        }
+        .onChange(of: self.vm.agentPhase) { _, _ in
+            self.vm.recalculateSize()
         }
         .transition(.opacity)
     }

@@ -18,8 +18,8 @@ class NotchViewModel: ObservableObject {
     @Published var agentPhase: NotchAgentPhase = .idle
     /// Accumulated assistant response text.
     @Published var transcript: String = ""
-    /// Reported content height from NotchHomeView.
-    @Published var contentHeight: CGFloat = 0
+    /// Whether contextual previews are visible.
+    @Published var showContextualPreviews: Bool = false
 
     var effectiveClosedNotchHeight: CGFloat {
         self.closedNotchSize.height
@@ -46,8 +46,7 @@ class NotchViewModel: ObservableObject {
         }
     }
 
-    func updateContentHeight(_ height: CGFloat) {
-        self.contentHeight = height
+    func recalculateSize() {
         guard self.notchState == .open else { return }
 
         let target = self.dynamicOpenSize
@@ -58,11 +57,24 @@ class NotchViewModel: ObservableObject {
         }
     }
 
-    /// Compute open size from reported content height + notch header overhead.
+    /// Compute open size from data model (no layout measurement).
     private var dynamicOpenSize: CGSize {
-        let headerOffset = self.effectiveClosedNotchHeight + 44
-        let total = self.contentHeight + headerOffset
-        let clamped = max(ScreenMetrics.minOpenHeight, min(total, ScreenMetrics.openNotchSize.height))
+        // Base: header(48) + progress bar(15) + status bar(30) + padding(37) + notch header offset
+        var height: CGFloat = 130 + self.effectiveClosedNotchHeight
+
+        if !self.transcript.isEmpty {
+            // Estimate text height: ~18px per line, ~50 chars per line at font size 14
+            let lineCount = max(1, ceil(CGFloat(self.transcript.count) / 50))
+            height += min(lineCount * 18, 300) + 44
+        } else {
+            height += 50
+        }
+
+        if self.showContextualPreviews {
+            height += 280
+        }
+
+        let clamped = max(ScreenMetrics.minOpenHeight, min(height, ScreenMetrics.openNotchSize.height))
         return CGSize(width: ScreenMetrics.openNotchSize.width, height: clamped)
     }
 
