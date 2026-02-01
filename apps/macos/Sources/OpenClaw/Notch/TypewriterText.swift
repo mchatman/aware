@@ -15,23 +15,50 @@ struct TypewriterText: View {
             .onAppear {
                 self.startTyping()
             }
-            .onChange(of: self.fullText) { oldValue, newValue in
-                if newValue != oldValue {
+            .onChange(of: self.fullText) { _, newValue in
+                if newValue.hasPrefix(self.displayedText) {
+                    // Text grew (streaming) — continue from where we are
+                    if self.timer == nil {
+                        self.startTyping()
+                    }
+                    // Timer already running? It'll catch up naturally.
+                } else {
+                    // Completely different text — reset
                     self.resetAndType()
+                }
+            }
+            .onChange(of: self.isTyping) { _, newValue in
+                if !newValue {
+                    // Streaming finished — show all remaining text immediately
+                    self.timer?.invalidate()
+                    self.timer = nil
+                    self.displayedText = self.fullText
+                    self.currentIndex = self.fullText.count
                 }
             }
             .onDisappear {
                 self.timer?.invalidate()
+                self.timer = nil
             }
     }
 
     private func startTyping() {
-        guard self.isTyping, self.currentIndex < self.fullText.count else {
+        // If not actively typing, show all text immediately
+        guard self.isTyping else {
+            self.timer?.invalidate()
+            self.timer = nil
             self.displayedText = self.fullText
+            self.currentIndex = self.fullText.count
             return
         }
 
-        self.timer?.invalidate()
+        guard self.currentIndex < self.fullText.count else {
+            return
+        }
+
+        // Don't restart if timer is already running
+        guard self.timer == nil else { return }
+
         self.timer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { _ in
             if self.currentIndex < self.fullText.count {
                 let index = self.fullText.index(self.fullText.startIndex, offsetBy: self.currentIndex)
@@ -39,11 +66,14 @@ struct TypewriterText: View {
                 self.currentIndex += 1
             } else {
                 self.timer?.invalidate()
+                self.timer = nil
             }
         }
     }
 
     private func resetAndType() {
+        self.timer?.invalidate()
+        self.timer = nil
         self.displayedText = ""
         self.currentIndex = 0
         self.startTyping()
