@@ -218,27 +218,7 @@ struct NotchHomeView: View {
     // MARK: - AI Message Section
 
     private var aiMessageSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                // Sparkles icon with border
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(self.blueAccent, lineWidth: 1)
-                        .frame(width: 32, height: 32)
-                        .blur(radius: 3)
-                        .opacity(0.5)
-
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(self.blueAccent.opacity(0.5), lineWidth: 1)
-                        .frame(width: 32, height: 32)
-
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(self.blueAccent)
-                }
-
-                // Message content based on agent phase
-                VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
                     if !self.vm.transcript.isEmpty {
                         TypewriterText(
                             fullText: self.vm.transcript,
@@ -273,9 +253,6 @@ struct NotchHomeView: View {
                             .foregroundColor(.white.opacity(0.35))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                }
-            }
-
         }
         .padding(.horizontal, 18)
     }
