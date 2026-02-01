@@ -146,7 +146,6 @@ struct NotchHomeView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
                         self.aiMessageSection
-                        self.contextualPreviewsSection
                         Color.clear.frame(height: 1).id("bottom")
                     }
                     .padding(.top, 12)
