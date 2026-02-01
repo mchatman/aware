@@ -31,9 +31,7 @@ struct NotchContentView: View {
         .padding(.bottom, 8)
         .frame(
             maxWidth: ScreenMetrics.openNotchSize.width,
-            maxHeight: self.vm.notchState == .open
-                ? self.vm.notchSize.height
-                : ScreenMetrics.openNotchSize.height,
+            maxHeight: ScreenMetrics.openNotchSize.height,
             alignment: .top)
         .shadow(
             color: self.vm.notchState == .open ? .black.opacity(0.2) : .clear,
@@ -65,6 +63,8 @@ struct NotchContentView: View {
                     .zIndex(1)
             }
         }
+        .frame(
+            height: self.vm.notchState == .open ? self.vm.notchSize.height : nil)
     }
 
     // MARK: - Hover
@@ -151,7 +151,6 @@ struct NotchHomeView: View {
             // 4. Bottom status bar
             self.bottomStatusBar(connStatus)
         }
-        .fixedSize(horizontal: false, vertical: true)
         .background(self.bgColor)
         .onChange(of: self.vm.transcript) { _, _ in
             self.vm.recalculateSize()
