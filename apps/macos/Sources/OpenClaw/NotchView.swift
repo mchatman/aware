@@ -125,7 +125,7 @@ struct NotchHomeView: View {
     @EnvironmentObject var vm: NotchViewModel
 
     // Color palette
-    private let bgColor = Color(red: 0.059, green: 0.059, blue: 0.067)
+    private let bgColor = Color.black
     private let tealAccent = Color(red: 0.0, green: 0.75, blue: 0.65)
     private let blueAccent = Color(red: 0.4, green: 0.6, blue: 1.0)
 
