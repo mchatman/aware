@@ -1,5 +1,14 @@
 import SwiftUI
 
+// MARK: - Text Area Height Preference Key
+
+struct TextAreaHeightKey: PreferenceKey {
+    nonisolated(unsafe) static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 // MARK: - Notch Content View
 
 struct NotchContentView: View {
@@ -148,16 +157,21 @@ struct NotchHomeView: View {
             self.aiMessageSection
                 .padding(.top, 12)
                 .padding(.bottom, 12)
+                .overlay(
+                    GeometryReader { geo in
+                        Color.clear.preference(key: TextAreaHeightKey.self, value: geo.size.height)
+                    })
+
+            Spacer()
 
             // 4. Bottom status bar
             self.bottomStatusBar(connStatus)
         }
         .background(self.bgColor)
-        .onChange(of: self.vm.transcript) { _, _ in
-            self.vm.recalculateSize()
-        }
-        .onChange(of: self.vm.agentPhase) { _, _ in
-            self.vm.recalculateSize()
+        .onPreferenceChange(TextAreaHeightKey.self) { height in
+            DispatchQueue.main.async {
+                self.vm.updateTextAreaHeight(height)
+            }
         }
         .transition(.opacity)
     }

@@ -39,43 +39,38 @@ class NotchViewModel: ObservableObject {
         self.closedNotchSize = self.notchSize
     }
 
+    /// Last measured text area height from the view.
+    private var measuredTextAreaHeight: CGFloat = 0
+
     func open() {
         withAnimation(.bouncy) {
-            self.notchSize = self.dynamicOpenSize
+            self.notchSize = CGSize(
+                width: ScreenMetrics.openNotchSize.width,
+                height: ScreenMetrics.minOpenHeight)
             self.notchState = .open
         }
     }
 
-    func recalculateSize() {
+    /// Called from the view when the rendered text area height changes.
+    func updateTextAreaHeight(_ height: CGFloat) {
+        self.measuredTextAreaHeight = height
         guard self.notchState == .open else { return }
 
-        let target = self.dynamicOpenSize
-        if abs(target.height - self.notchSize.height) > 2 {
-            withAnimation(.smooth(duration: 0.3)) {
-                self.notchSize = target
-            }
-        }
-    }
-
-    /// Compute open size from data model (no layout measurement).
-    private var dynamicOpenSize: CGSize {
-        // Base: header(48) + progress bar(15) + status bar(30) + padding(37) + notch header offset
-        var height: CGFloat = 130 + self.effectiveClosedNotchHeight
-
-        if !self.transcript.isEmpty {
-            // Estimate text height: ~18px per line, ~50 chars per line at font size 14
-            let lineCount = max(1, ceil(CGFloat(self.transcript.count) / 50))
-            height += min(lineCount * 18, 300) + 44
-        } else {
-            height += 50
-        }
+        // Chrome: header(48) + progress+padding(15) + status(30) + padding(~30) + notch header
+        let chrome: CGFloat = 123 + self.effectiveClosedNotchHeight
+        var needed = chrome + height
 
         if self.showContextualPreviews {
-            height += 280
+            needed += 280
         }
 
-        let clamped = max(ScreenMetrics.minOpenHeight, min(height, ScreenMetrics.openNotchSize.height))
-        return CGSize(width: ScreenMetrics.openNotchSize.width, height: clamped)
+        let target = max(ScreenMetrics.minOpenHeight, min(needed, ScreenMetrics.openNotchSize.height))
+
+        if abs(target - self.notchSize.height) > 2 {
+            withAnimation(.smooth(duration: 0.3)) {
+                self.notchSize = CGSize(width: ScreenMetrics.openNotchSize.width, height: target)
+            }
+        }
     }
 
     func close() {
