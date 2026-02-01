@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - Screen Metrics
 
 struct ScreenMetrics {
-    static let openNotchSize: CGSize = .init(width: 640, height: 190)
+    static let openNotchSize: CGSize = .init(width: 640, height: 560)
 
     static func closedNotchSize(screenName: String? = nil) -> CGSize {
         var notchHeight: CGFloat = 32

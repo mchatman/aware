@@ -124,129 +124,33 @@ struct NotchHeaderView: View {
 struct NotchHomeView: View {
     @EnvironmentObject var vm: NotchViewModel
 
+    // Color palette
+    private let bgColor = Color(red: 0.059, green: 0.059, blue: 0.067)
+    private let tealAccent = Color(red: 0.0, green: 0.75, blue: 0.65)
+    private let blueAccent = Color(red: 0.4, green: 0.6, blue: 1.0)
+
     var body: some View {
         let connStatus = self.vm.parsedConnectionStatus
 
         VStack(spacing: 0) {
-            // Top section: status + wave + controls
-            HStack(spacing: 12) {
-                // Connection status + agent phase
-                HStack(spacing: 8) {
-                    let statusColor = self.connectionStatusColor(connStatus)
-                    ZStack {
-                        Circle().fill(statusColor).frame(width: 12, height: 12)
-                            .blur(radius: 3).opacity(0.18)
-                        Circle().fill(statusColor).frame(width: 12, height: 12)
-                            .blur(radius: 1).opacity(0.15)
-                        Circle().fill(statusColor).frame(width: 12, height: 12)
-                    }
+            // 1. Header bar
+            self.headerBar(connStatus)
 
-                    Text(self.statusText(connStatus))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.9))
-                        .lineLimit(1)
-                }
+            // 2. Gradient progress bar
+            GradientProgressBar()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
 
-                Spacer()
-
-                // Wave visualization
-                SmoothWaveView(
-                    isAnimating: connStatus != .disconnected,
-                    state: self.smoothWaveState(connStatus),
-                    audioLevel: 0)
-                    .frame(height: 30)
-                    .mask(
-                        LinearGradient(
-                            gradient: Gradient(stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: .black, location: 0.1),
-                                .init(color: .black, location: 0.9),
-                                .init(color: .clear, location: 1),
-                            ]),
-                            startPoint: .leading,
-                            endPoint: .trailing))
-
-                Spacer()
-
-                // Phase icon
-                self.phaseIcon
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.8))
-                    .frame(width: 24, height: 24)
-            }
-            .padding(.horizontal, 20)
-            .frame(height: 60)
-            .background(Color.black)
-
-            // Divider
-            ZStack {
-                Rectangle().fill(Color.white.opacity(0.18))
-                    .frame(maxWidth: .infinity).frame(height: 2.5).blur(radius: 3)
-                Rectangle().fill(Color.white.opacity(0.15))
-                    .frame(maxWidth: .infinity).frame(height: 1).blur(radius: 1)
-                Rectangle().fill(Color.white.opacity(0.12))
-                    .frame(maxWidth: .infinity).frame(height: 0.5)
-            }
-            .frame(maxWidth: .infinity)
-
-            // Transcript area
+            // 3. AI message / agent state
             ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if !self.vm.transcript.isEmpty {
-                            HStack(alignment: .top, spacing: 14) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(self.accentColor, lineWidth: 1)
-                                        .frame(width: 36, height: 36)
-                                        .blur(radius: 3).opacity(0.6)
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(self.accentColor.opacity(0.5), lineWidth: 1)
-                                        .frame(width: 36, height: 36)
-                                    Image(systemName: "sparkles")
-                                        .font(.system(size: 18, weight: .medium))
-                                        .foregroundColor(self.accentColor)
-                                }
-
-                                TypewriterText(
-                                    fullText: self.vm.transcript,
-                                    isTyping: self.vm.agentPhase == .responding)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 20)
-                        } else if self.vm.agentPhase == .thinking {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .scaleEffect(0.8)
-                                Text("Thinking…")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.6))
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 20)
-                        } else if case let .toolUse(label) = self.vm.agentPhase {
-                            HStack(spacing: 8) {
-                                Image(systemName: "gearshape.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.orange.opacity(0.8))
-                                    .rotationEffect(.degrees(self.vm.agentPhase != .idle ? 360 : 0))
-                                    .animation(
-                                        .linear(duration: 2).repeatForever(autoreverses: false),
-                                        value: self.vm.agentPhase)
-                                Text(label)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.white.opacity(0.7))
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 20)
-                        }
-
-                        // Scroll anchor
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        self.aiMessageSection
+                        self.contextualPreviewsSection
                         Color.clear.frame(height: 1).id("bottom")
                     }
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
                 }
                 .onChange(of: self.vm.transcript) { _, _ in
                     withAnimation(.easeOut(duration: 0.15)) {
@@ -255,23 +159,204 @@ struct NotchHomeView: View {
                 }
             }
             .frame(maxHeight: .infinity)
-            .background(Color.black.opacity(0.95))
+
+            Spacer(minLength: 4)
+
+            // 4. Bottom status bar
+            self.bottomStatusBar(connStatus)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(self.bgColor)
         .transition(.opacity)
     }
 
-    // MARK: - Computed
+    // MARK: - Header Bar
 
-    private var accentColor: Color {
-        Color(red: 0.4, green: 0.6, blue: 1.0)
+    private func headerBar(_ connStatus: NotchConnectionStatus) -> some View {
+        HStack(spacing: 10) {
+            // Left: icon + label
+            HStack(spacing: 7) {
+                ZStack {
+                    Circle()
+                        .fill(self.connectionStatusColor(connStatus).opacity(0.15))
+                        .frame(width: 28, height: 28)
+                    Image(systemName: "cpu")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(self.connectionStatusColor(connStatus))
+                }
+
+                Text("AI Assistant")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+            }
+
+            Spacer()
+
+            // Right: phase icon + settings
+            HStack(spacing: 14) {
+                self.phaseIcon
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+                    .frame(width: 24, height: 24)
+
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+                    .frame(width: 24, height: 24)
+            }
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 48)
     }
+
+    // MARK: - AI Message Section
+
+    private var aiMessageSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                // Sparkles icon with border
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(self.blueAccent, lineWidth: 1)
+                        .frame(width: 32, height: 32)
+                        .blur(radius: 3)
+                        .opacity(0.5)
+
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(self.blueAccent.opacity(0.5), lineWidth: 1)
+                        .frame(width: 32, height: 32)
+
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(self.blueAccent)
+                }
+
+                // Message content based on agent phase
+                VStack(alignment: .leading, spacing: 6) {
+                    if !self.vm.transcript.isEmpty {
+                        TypewriterText(
+                            fullText: self.vm.transcript,
+                            isTyping: self.vm.agentPhase == .responding)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else if self.vm.agentPhase == .thinking {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .scaleEffect(0.8)
+                            Text("Thinking…")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                    } else if case let .toolUse(label) = self.vm.agentPhase {
+                        HStack(spacing: 8) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.orange.opacity(0.8))
+                                .rotationEffect(.degrees(self.vm.agentPhase != .idle ? 360 : 0))
+                                .animation(
+                                    .linear(duration: 2).repeatForever(autoreverses: false),
+                                    value: self.vm.agentPhase)
+                            Text(label)
+                                .font(.system(size: 13))
+                                .foregroundColor(.white.opacity(0.7))
+                                .lineLimit(1)
+                        }
+                    } else {
+                        Text("Awaiting input…")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.35))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+
+            // Action chips
+            HStack(spacing: 8) {
+                ActionChip(label: "ANALYSIS COMPLETE")
+                ActionChip(label: "DATA SYNC")
+            }
+            .padding(.leading, 44)
+        }
+        .padding(.horizontal, 18)
+    }
+
+    // MARK: - Contextual Previews Section
+
+    private var contextualPreviewsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Section header
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(self.tealAccent)
+                    .frame(width: 6, height: 6)
+
+                Text("CONTEXTUAL PREVIEWS")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundColor(.white.opacity(0.5))
+
+                Spacer()
+
+                Text("VIEW ALL")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.5)
+                    .foregroundColor(self.tealAccent)
+            }
+            .padding(.horizontal, 18)
+
+            // Preview card
+            ContextualPreviewCard()
+                .padding(.horizontal, 14)
+        }
+        .padding(.vertical, 4)
+    }
+
+    // MARK: - Bottom Status Bar
+
+    private func bottomStatusBar(_ connStatus: NotchConnectionStatus) -> some View {
+        HStack {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(self.connectionStatusColor(connStatus))
+                    .frame(width: 6, height: 6)
+
+                Text("System standby...")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.3))
+            }
+
+            Spacer()
+
+            Button(action: {
+                self.vm.close()
+            }) {
+                HStack(spacing: 4) {
+                    Text("DISMISS")
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(0.5)
+                    Text("×")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(.white.opacity(0.4))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 1))
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 10)
+    }
+
+    // MARK: - Computed
 
     @ViewBuilder
     private var phaseIcon: some View {
         switch self.vm.agentPhase {
         case .idle:
-            Image(systemName: "moon.zzz.fill")
+            Image(systemName: "mic.fill")
         case .thinking:
             Image(systemName: "brain")
         case .toolUse:
@@ -281,38 +366,11 @@ struct NotchHomeView: View {
         }
     }
 
-    private func smoothWaveState(_ connStatus: NotchConnectionStatus) -> SmoothWaveView.VisualizationState {
-        switch connStatus {
-        case .disconnected: .idle
-        case .connecting: .connecting
-        case .connected:
-            switch self.vm.agentPhase {
-            case .responding: .speaking
-            case .thinking, .toolUse: .listening
-            case .idle: .idle
-            }
-        }
-    }
-
     private func connectionStatusColor(_ status: NotchConnectionStatus) -> Color {
         switch status {
         case .connected: .green
         case .connecting: .gray
         case .disconnected: .red
-        }
-    }
-
-    private func statusText(_ connStatus: NotchConnectionStatus) -> String {
-        switch connStatus {
-        case .disconnected: "Disconnected"
-        case .connecting: "Connecting"
-        case .connected:
-            switch self.vm.agentPhase {
-            case .idle: "Connected"
-            case .thinking: "Thinking…"
-            case let .toolUse(label): label
-            case .responding: "Responding…"
-            }
         }
     }
 }
