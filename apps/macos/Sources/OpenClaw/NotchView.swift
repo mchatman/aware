@@ -64,7 +64,8 @@ struct NotchContentView: View {
             }
         }
         .frame(
-            height: self.vm.notchState == .open ? self.vm.notchSize.height : nil)
+            height: self.vm.notchState == .open ? self.vm.notchSize.height : nil,
+            alignment: .top)
     }
 
     // MARK: - Hover
