@@ -18,6 +18,8 @@ class NotchViewModel: ObservableObject {
     @Published var agentPhase: NotchAgentPhase = .idle
     /// Accumulated assistant response text.
     @Published var transcript: String = ""
+    /// Reported content height from NotchHomeView.
+    @Published var contentHeight: CGFloat = 0
 
     var effectiveClosedNotchHeight: CGFloat {
         self.closedNotchSize.height
@@ -39,9 +41,29 @@ class NotchViewModel: ObservableObject {
 
     func open() {
         withAnimation(.bouncy) {
-            self.notchSize = ScreenMetrics.openNotchSize
+            self.notchSize = self.dynamicOpenSize
             self.notchState = .open
         }
+    }
+
+    func updateContentHeight(_ height: CGFloat) {
+        self.contentHeight = height
+        guard self.notchState == .open else { return }
+
+        let target = self.dynamicOpenSize
+        if abs(target.height - self.notchSize.height) > 2 {
+            withAnimation(.smooth(duration: 0.3)) {
+                self.notchSize = target
+            }
+        }
+    }
+
+    /// Compute open size from reported content height + notch header overhead.
+    private var dynamicOpenSize: CGSize {
+        let headerOffset = self.effectiveClosedNotchHeight + 44
+        let total = self.contentHeight + headerOffset
+        let clamped = max(ScreenMetrics.minOpenHeight, min(total, ScreenMetrics.openNotchSize.height))
+        return CGSize(width: ScreenMetrics.openNotchSize.width, height: clamped)
     }
 
     func close() {

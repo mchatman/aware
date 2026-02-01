@@ -1,5 +1,14 @@
 import SwiftUI
 
+// MARK: - Content Height Preference Key
+
+struct NotchContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 // MARK: - Notch Content View
 
 struct NotchContentView: View {
@@ -31,7 +40,9 @@ struct NotchContentView: View {
         .padding(.bottom, 8)
         .frame(
             maxWidth: ScreenMetrics.openNotchSize.width,
-            maxHeight: ScreenMetrics.openNotchSize.height,
+            maxHeight: self.vm.notchState == .open
+                ? self.vm.notchSize.height
+                : ScreenMetrics.openNotchSize.height,
             alignment: .top)
         .shadow(
             color: self.vm.notchState == .open ? .black.opacity(0.2) : .clear,
@@ -142,30 +153,23 @@ struct NotchHomeView: View {
                 .padding(.vertical, 6)
 
             // 3. AI message / agent state
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        self.aiMessageSection
-                        Color.clear.frame(height: 1).id("bottom")
-                    }
-                    .padding(.top, 12)
-                    .padding(.bottom, 8)
-                }
-                .onChange(of: self.vm.transcript) { _, _ in
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo("bottom", anchor: .bottom)
-                    }
-                }
-            }
-            .frame(maxHeight: .infinity)
+            self.aiMessageSection
+                .padding(.top, 12)
+                .padding(.bottom, 8)
 
             Spacer(minLength: 4)
 
             // 4. Bottom status bar
             self.bottomStatusBar(connStatus)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(self.bgColor)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: NotchContentHeightKey.self, value: geo.size.height)
+            })
+        .onPreferenceChange(NotchContentHeightKey.self) { height in
+            self.vm.updateContentHeight(height)
+        }
         .transition(.opacity)
     }
 
