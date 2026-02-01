@@ -233,6 +233,7 @@ struct NotchHomeView: View {
                                 .font(.system(size: 14))
                                 .foregroundColor(.white.opacity(0.6))
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     } else if case let .toolUse(label) = self.vm.agentPhase {
                         HStack(spacing: 8) {
                             Image(systemName: "gearshape.fill")
@@ -247,6 +248,7 @@ struct NotchHomeView: View {
                                 .foregroundColor(.white.opacity(0.7))
                                 .lineLimit(1)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
                         Text("Awaiting input…")
                             .font(.system(size: 14))
