@@ -90,7 +90,8 @@ actor AwareAPIClient {
     }
 
     func getMe() async throws -> Aware.User {
-        try await get("/api/auth/me")
+        let wrapper: Aware.UserWrapper = try await get("/api/auth/me")
+        return wrapper.user
     }
 
     func logout() async throws {
@@ -100,39 +101,46 @@ actor AwareAPIClient {
     // MARK: Teams
 
     func createTeam(name: String) async throws -> Aware.Team {
-        try await post("/api/teams", body: ["name": name])
+        let wrapper: Aware.TeamWrapper = try await post("/api/teams", body: ["name": name])
+        return wrapper.team
     }
 
     func listTeams() async throws -> [Aware.Team] {
-        try await get("/api/teams")
+        let wrapper: Aware.TeamsWrapper = try await get("/api/teams")
+        return wrapper.teams
     }
 
     func getTeam(id: String) async throws -> Aware.Team {
-        try await get("/api/teams/\(id)")
+        let wrapper: Aware.TeamWrapper = try await get("/api/teams/\(id)")
+        return wrapper.team
     }
 
     func listTeamMembers(teamId: String) async throws -> [Aware.TeamMember] {
-        try await get("/api/teams/\(teamId)/members")
+        let wrapper: Aware.MembersWrapper = try await get("/api/teams/\(teamId)/members")
+        return wrapper.members
     }
 
     func addTeamMember(teamId: String, email: String, role: String) async throws -> Aware.TeamMember {
-        try await post("/api/teams/\(teamId)/members", body: [
+        let wrapper: Aware.MemberWrapper = try await post("/api/teams/\(teamId)/members", body: [
             "email": email,
             "role": role,
         ])
+        return wrapper.member
     }
 
     // MARK: Connectors
 
     func listConnectors(teamId: String) async throws -> [Aware.Connector] {
-        try await get("/api/teams/\(teamId)/connectors")
+        let wrapper: Aware.ConnectorsWrapper = try await get("/api/teams/\(teamId)/connectors")
+        return wrapper.connectors
     }
 
     func enableConnector(teamId: String, provider: String, scopes: String) async throws -> Aware.Connector {
-        try await post("/api/teams/\(teamId)/connectors", body: [
+        let wrapper: Aware.ConnectorWrapper = try await post("/api/teams/\(teamId)/connectors", body: [
             "provider": provider,
             "scopes": scopes,
         ])
+        return wrapper.connector
     }
 
     func disableConnector(teamId: String, connectorId: String) async throws {
@@ -142,13 +150,14 @@ actor AwareAPIClient {
     // MARK: OAuth
 
     func getOAuthURL(provider: String, scopes: String?) async throws -> Aware.OAuthAuthorizeResponse {
-        var body: [String: String] = ["provider": provider]
-        if let scopes { body["scopes"] = scopes }
-        return try await post("/api/oauth/authorize", body: body)
+        var path = "/api/oauth/\(provider)/authorize"
+        if let scopes { path += "?scopes=\(scopes)" }
+        return try await get(path)
     }
 
     func listConnections() async throws -> [Aware.OAuthConnection] {
-        try await get("/api/oauth/connections")
+        let wrapper: Aware.ConnectionsWrapper = try await get("/api/oauth/connections")
+        return wrapper.connections
     }
 
     func removeConnection(id: String) async throws {
@@ -158,7 +167,8 @@ actor AwareAPIClient {
     // MARK: Billing
 
     func getSubscription(teamId: String) async throws -> Aware.Subscription {
-        try await get("/api/teams/\(teamId)/billing/subscription")
+        let wrapper: Aware.SubscriptionWrapper = try await get("/api/teams/\(teamId)/billing")
+        return wrapper.subscription
     }
 
     func subscribe(teamId: String, priceId: String) async throws -> String {

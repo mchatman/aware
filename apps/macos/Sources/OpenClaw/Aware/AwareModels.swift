@@ -32,6 +32,11 @@ enum Aware {
         var createdAt: String?
     }
 
+    /// `GET /api/auth/me` returns `{ data: { user: {...} } }`
+    struct UserWrapper: Codable, Sendable {
+        let user: User
+    }
+
     // MARK: Teams
 
     struct Team: Codable, Sendable, Identifiable {
@@ -40,6 +45,7 @@ enum Aware {
         let slug: String
         var role: String?
         let createdAt: String
+        var updatedAt: String?
     }
 
     struct TeamMember: Codable, Sendable, Identifiable {
@@ -51,6 +57,15 @@ enum Aware {
         let name: String
     }
 
+    /// `POST /api/teams` returns `{ data: { team: {...} } }`
+    struct TeamWrapper: Codable, Sendable { let team: Team }
+    /// `GET /api/teams` returns `{ data: { teams: [...] } }`
+    struct TeamsWrapper: Codable, Sendable { let teams: [Team] }
+    /// `GET /api/teams/:id/members` returns `{ data: { members: [...] } }`
+    struct MembersWrapper: Codable, Sendable { let members: [TeamMember] }
+    /// `POST /api/teams/:id/members` returns `{ data: { member: {...} } }`
+    struct MemberWrapper: Codable, Sendable { let member: TeamMember }
+
     // MARK: Connectors
 
     struct Connector: Codable, Sendable, Identifiable {
@@ -60,7 +75,13 @@ enum Aware {
         let enabled: Bool
         let scopes: String?
         let createdAt: String
+        var updatedAt: String?
     }
+
+    /// `GET /api/teams/:id/connectors` returns `{ data: { connectors: [...] } }`
+    struct ConnectorsWrapper: Codable, Sendable { let connectors: [Connector] }
+    /// `POST /api/teams/:id/connectors` returns `{ data: { connector: {...} } }`
+    struct ConnectorWrapper: Codable, Sendable { let connector: Connector }
 
     // MARK: Billing
 
@@ -71,6 +92,9 @@ enum Aware {
         let currentPeriodEnd: String?
         let cancelAtPeriodEnd: Bool
     }
+
+    /// `GET /api/teams/:id/billing` returns `{ data: { subscription: {...} } }`
+    struct SubscriptionWrapper: Codable, Sendable { let subscription: Subscription }
 
     struct CheckoutResponse: Codable, Sendable {
         let url: String
@@ -94,4 +118,7 @@ enum Aware {
         let url: String
         let state: String
     }
+
+    /// `GET /api/oauth/connections` returns `{ data: { connections: [...] } }`
+    struct ConnectionsWrapper: Codable, Sendable { let connections: [OAuthConnection] }
 }
