@@ -156,10 +156,8 @@ resource "aws_ecs_service" "api" {
   health_check_grace_period_seconds = 60
 
   # Rolling update deployment
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
-  }
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
 
   # Ensure the ALB listener is ready before creating the service
   depends_on = [aws_lb_listener.https]
