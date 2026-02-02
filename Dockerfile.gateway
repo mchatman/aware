@@ -1,0 +1,32 @@
+# =============================================================================
+# Aware Gateway — Production Dockerfile
+# =============================================================================
+# Multi-stage build:
+#   1. Install dependencies and compile TypeScript (build)
+#   2. Lean production image with compiled JS only
+# =============================================================================
+
+# Stage 1: Install deps + compile
+FROM node:22-alpine AS build
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches/ ./patches/
+ENV OPENCLAW_SKIP_POSTINSTALL=1
+RUN pnpm install --frozen-lockfile
+COPY tsconfig.json ./
+COPY src/ ./src/
+RUN npx tsc || true
+
+# Stage 2: Production image
+FROM node:22-alpine
+WORKDIR /app
+RUN corepack enable
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./
+COPY --from=build /app/dist/ ./dist/
+
+EXPOSE 18789
+
+# Start the OpenClaw gateway, listening on all interfaces
+CMD ["node", "dist/index.js", "gateway", "--bind", "lan", "--port", "18789"]
