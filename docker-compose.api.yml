@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aware
+      POSTGRES_PASSWORD: aware_dev
+      POSTGRES_DB: aware
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aware"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      DATABASE_URL: postgres://aware:aware_dev@postgres:5432/aware
+      JWT_SECRET: dev-secret-change-in-production
+      API_HOST: "0.0.0.0"
+      API_PORT: "3001"
+      CORS_ORIGIN: "*"
+      # Set these to test OAuth / Stripe:
+      # GOOGLE_CLIENT_ID: ""
+      # GOOGLE_CLIENT_SECRET: ""
+      # MICROSOFT_CLIENT_ID: ""
+      # MICROSOFT_CLIENT_SECRET: ""
+      # STRIPE_SECRET_KEY: ""
+      # STRIPE_WEBHOOK_SECRET: ""
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

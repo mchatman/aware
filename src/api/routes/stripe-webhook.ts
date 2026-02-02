@@ -8,7 +8,7 @@
 
 import { Router } from "express";
 import type { Request, Response } from "express";
-import * as bodyParser from "body-parser";
+import express from "express";
 import { eq } from "drizzle-orm";
 import Stripe from "stripe";
 
@@ -24,7 +24,7 @@ export const stripeWebhookRouter = Router();
 
 // Stripe requires the raw body to verify webhook signatures.
 // Apply raw body parser only to this router.
-stripeWebhookRouter.use(bodyParser.raw({ type: "application/json" }));
+stripeWebhookRouter.use(express.raw({ type: "application/json" }));
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
