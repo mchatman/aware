@@ -46,6 +46,10 @@ enum Aware {
         var role: String?
         let createdAt: String
         var updatedAt: String?
+        /// Gateway WebSocket URL for this team's tenant container.
+        var gatewayUrl: String?
+        /// Tenant container status: provisioning, running, stopped, error.
+        var tenantStatus: String?
     }
 
     struct TeamMember: Codable, Sendable, Identifiable {

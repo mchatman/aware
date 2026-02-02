@@ -14,6 +14,7 @@ import { connectorsRouter } from "./routes/connectors.js";
 import { gatewayTokensRouter } from "./routes/gateway-tokens.js";
 import { billingRouter } from "./routes/billing.js";
 import { stripeWebhookRouter } from "./routes/stripe-webhook.js";
+import { tenantsRouter } from "./routes/tenants.js";
 
 /* ------------------------------------------------------------------ */
 /*  App setup                                                          */
@@ -68,6 +69,9 @@ app.use("/api/gateway", gatewayTokensRouter);
 
 // Billing routes (nested under teams/:teamId/billing)
 app.use("/api/teams/:teamId/billing", billingRouter);
+
+// Tenant provisioning routes (nested under teams/:teamId/tenant)
+app.use("/api/teams/:teamId/tenant", tenantsRouter);
 
 /* ------------------------------------------------------------------ */
 /*  Error handler                                                      */

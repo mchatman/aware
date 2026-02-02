@@ -201,6 +201,39 @@ export const usageRecords = pgTable("usage_records", {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Tenant status enum                                                 */
+/* ------------------------------------------------------------------ */
+
+/** Tenant container lifecycle status. */
+export const tenantStatusEnum = pgEnum("tenant_status", [
+  "provisioning",
+  "running",
+  "stopped",
+  "error",
+]);
+
+/* ------------------------------------------------------------------ */
+/*  Tenants                                                            */
+/* ------------------------------------------------------------------ */
+
+/** Tenant containers — one per team, runs an isolated OpenClaw gateway. */
+export const tenants = pgTable("tenants", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  teamId: uuid("team_id")
+    .notNull()
+    .references(() => teams.id, { onDelete: "cascade" })
+    .unique(),
+  containerId: varchar("container_id", { length: 255 }),
+  containerName: varchar("container_name", { length: 255 }).notNull().unique(),
+  port: integer("port").notNull().unique(),
+  gatewayUrl: text("gateway_url").notNull(),
+  status: tenantStatusEnum("status").notNull().default("provisioning"),
+  imageTag: varchar("image_tag", { length: 255 }).notNull().default("latest"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------ */
 /*  TypeScript helpers                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -248,3 +281,8 @@ export type Subscription = typeof subscriptions.$inferSelect;
 export type NewUsageRecord = typeof usageRecords.$inferInsert;
 /** Inferred select type for `usageRecords`. */
 export type UsageRecord = typeof usageRecords.$inferSelect;
+
+/** Inferred insert type for `tenants`. */
+export type NewTenant = typeof tenants.$inferInsert;
+/** Inferred select type for `tenants`. */
+export type Tenant = typeof tenants.$inferSelect;

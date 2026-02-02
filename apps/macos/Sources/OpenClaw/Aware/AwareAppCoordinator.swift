@@ -88,8 +88,39 @@ final class AwareAppCoordinator {
         AwareAuthWindowController.shared.close()
         AwareOnboardingWindowController.shared.close()
 
-        // TODO: Configure gateway connection to the team's tenant container.
-        // For now, the app proceeds with normal OpenClaw connection flow.
-        // Future: use team ID to resolve the tenant gateway URL and connect.
+        // Connect to the team's tenant gateway.
+        connectToTenantGateway()
+    }
+
+    // MARK: - Gateway Connection
+
+    private func connectToTenantGateway() {
+        guard let team = teams.currentTeam else {
+            log.warning("No current team — skipping gateway connection")
+            return
+        }
+
+        guard let gatewayUrl = team.gatewayUrl,
+              !gatewayUrl.isEmpty,
+              team.tenantStatus == "running" else {
+            log.info("Tenant not ready (status: \(team.tenantStatus ?? "none", privacy: .public)) — skipping gateway connection")
+            return
+        }
+
+        // Convert HTTP URL to WebSocket URL for the gateway connection.
+        let wsUrl = gatewayUrl
+            .replacingOccurrences(of: "http://", with: "ws://")
+            .replacingOccurrences(of: "https://", with: "wss://")
+
+        log.info("Connecting to tenant gateway: \(wsUrl, privacy: .public)")
+
+        // Configure the app to connect to the tenant gateway in direct/remote mode.
+        let state = AppStateStore.shared
+        state.connectionMode = .remote
+        state.remoteUrl = wsUrl
+
+        Task {
+            await ConnectionModeCoordinator.shared.apply(mode: .remote, paused: state.isPaused)
+        }
     }
 }

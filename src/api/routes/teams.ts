@@ -9,8 +9,9 @@ import type { Request, Response, NextFunction } from "express";
 import { eq, and } from "drizzle-orm";
 
 import { getDb } from "../db/connection.js";
-import { teams, teamMembers, users } from "../db/schema.js";
+import { teams, teamMembers, users, tenants } from "../db/schema.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
+import { getProvisioner } from "../services/tenant-provisioner.js";
 
 export const teamsRouter = Router();
 
@@ -125,6 +126,15 @@ teamsRouter.post("/", requireAuth, async (req: Request, res: Response) => {
       role: "owner",
     });
 
+    // Auto-provision tenant gateway
+    try {
+      const provisioner = getProvisioner();
+      await provisioner.provision({ id: team.id, slug });
+    } catch (provisionErr) {
+      console.error("Auto-provision failed (non-fatal):", provisionErr);
+      // Don't fail team creation if provisioning fails — they can retry
+    }
+
     res.status(201).json({ data: { team } });
   } catch (err) {
     console.error("Create team error:", err);
@@ -148,9 +158,12 @@ teamsRouter.get("/", requireAuth, async (req: Request, res: Response) => {
         slug: teams.slug,
         role: teamMembers.role,
         createdAt: teams.createdAt,
+        gatewayUrl: tenants.gatewayUrl,
+        tenantStatus: tenants.status,
       })
       .from(teamMembers)
       .innerJoin(teams, eq(teamMembers.teamId, teams.id))
+      .leftJoin(tenants, eq(tenants.teamId, teams.id))
       .where(eq(teamMembers.userId, sub));
 
     res.json({ data: { teams: rows } });
@@ -169,14 +182,27 @@ teamsRouter.get("/:teamId", requireAuth, requireTeamRole(), async (req: Request,
     const teamId = req.params.teamId as string;
     const db = getDb();
 
-    const [team] = await db.select().from(teams).where(eq(teams.id, teamId)).limit(1);
+    const [row] = await db
+      .select({
+        id: teams.id,
+        name: teams.name,
+        slug: teams.slug,
+        createdAt: teams.createdAt,
+        updatedAt: teams.updatedAt,
+        gatewayUrl: tenants.gatewayUrl,
+        tenantStatus: tenants.status,
+      })
+      .from(teams)
+      .leftJoin(tenants, eq(tenants.teamId, teams.id))
+      .where(eq(teams.id, teamId))
+      .limit(1);
 
-    if (!team) {
+    if (!row) {
       res.status(404).json({ error: "Team not found", code: "NOT_FOUND" });
       return;
     }
 
-    res.json({ data: { team } });
+    res.json({ data: { team: row } });
   } catch (err) {
     console.error("Get team error:", err);
     res.status(500).json({ error: "Internal server error" });
