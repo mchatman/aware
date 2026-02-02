@@ -1,19 +1,60 @@
 services:
+  # === Infrastructure ===
+
+  postgres:
+    image: postgres:16
+    container_name: aware-postgres
+    environment:
+      POSTGRES_DB: bluefairy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: aware-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # === Application Services ===
+
+  bluefairy:
+    build: ./bluefairy
+    container_name: aware-bluefairy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DATABASE_URI: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/bluefairy
+      REDIS_URI: redis://redis:6379/0
+      OPENCLAW_BASE_URL: http://openclaw-gateway:${OPENCLAW_GATEWAY_PORT:-3420}
+    ports:
+      - "${BLUEFAIRY_PORT:-8000}:8000"
+    depends_on:
+      - postgres
+      - redis
+      - openclaw-gateway
+    restart: unless-stopped
+
   openclaw-gateway:
     image: ${OPENCLAW_IMAGE:-openclaw:local}
+    container_name: aware-openclaw
     environment:
       HOME: /home/node
       TERM: xterm-256color
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
-      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
-      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
-      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     volumes:
-      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
-      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - ${OPENCLAW_CONFIG_DIR:-./openclaw-config}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-./openclaw-workspace}:/home/node/.openclaw/workspace
     ports:
-      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
-      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+      - "${OPENCLAW_GATEWAY_PORT:-3420}:3420"
     init: true
     restart: unless-stopped
     command:
@@ -22,24 +63,11 @@ services:
         "dist/index.js",
         "gateway",
         "--bind",
-        "${OPENCLAW_GATEWAY_BIND:-lan}",
+        "lan",
         "--port",
-        "${OPENCLAW_GATEWAY_PORT:-18789}"
+        "${OPENCLAW_GATEWAY_PORT:-3420}"
       ]
 
-  openclaw-cli:
-    image: ${OPENCLAW_IMAGE:-openclaw:local}
-    environment:
-      HOME: /home/node
-      TERM: xterm-256color
-      BROWSER: echo
-      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
-      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
-      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
-    volumes:
-      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
-      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
-    stdin_open: true
-    tty: true
-    init: true
-    entrypoint: ["node", "dist/index.js"]
+volumes:
+  postgres_data:
+  redis_data:
