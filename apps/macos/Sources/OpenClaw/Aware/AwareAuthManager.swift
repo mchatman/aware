@@ -146,7 +146,7 @@ final class AwareAuthManager {
 
     private func friendlyError(_ error: Error) -> String {
         if let apiErr = error as? AwareAPIError {
-            return apiErr.localizedDescription ?? "Something went wrong."
+            return apiErr.localizedDescription
         }
         return error.localizedDescription
     }

@@ -66,28 +66,25 @@ final class AwareTeamManager {
 
         log.info("Selected team: \(team.name, privacy: .public) (\(team.id, privacy: .public))")
 
-        // Fire all fetches concurrently.
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                do { self.members = try await self.api.listTeamMembers(teamId: team.id) }
-                catch { log.warning("Members fetch failed: \(error.localizedDescription, privacy: .public)") }
-            }
-            group.addTask { @MainActor in
-                do { self.connectors = try await self.api.listConnectors(teamId: team.id) }
-                catch { log.warning("Connectors fetch failed: \(error.localizedDescription, privacy: .public)") }
-            }
-            group.addTask { @MainActor in
-                do { self.connections = try await self.api.listConnections() }
-                catch { log.warning("Connections fetch failed: \(error.localizedDescription, privacy: .public)") }
-            }
-            group.addTask { @MainActor in
-                do { self.subscription = try await self.api.getSubscription(teamId: team.id) }
-                catch {
-                    // Subscription may 404 if the team has none — that's fine.
-                    self.subscription = nil
-                    log.debug("No subscription for team \(team.id, privacy: .public)")
-                }
-            }
+        // Fire all fetches concurrently off the main actor, then assign results back.
+        async let fetchedMembers = api.listTeamMembers(teamId: team.id)
+        async let fetchedConnectors = api.listConnectors(teamId: team.id)
+        async let fetchedConnections = api.listConnections()
+        async let fetchedSubscription = api.getSubscription(teamId: team.id)
+
+        do { members = try await fetchedMembers }
+        catch { log.warning("Members fetch failed: \(error.localizedDescription, privacy: .public)") }
+
+        do { connectors = try await fetchedConnectors }
+        catch { log.warning("Connectors fetch failed: \(error.localizedDescription, privacy: .public)") }
+
+        do { connections = try await fetchedConnections }
+        catch { log.warning("Connections fetch failed: \(error.localizedDescription, privacy: .public)") }
+
+        do { subscription = try await fetchedSubscription }
+        catch {
+            subscription = nil
+            log.debug("No subscription for team \(team.id, privacy: .public)")
         }
     }
 
