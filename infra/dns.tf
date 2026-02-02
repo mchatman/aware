@@ -1,20 +1,22 @@
 # =============================================================================
 # Aware Infrastructure — Route 53 & ACM Certificate
 # =============================================================================
-# Prerequisites:
-#   - wareit.ai hosted zone must exist in Route 53
-#   - If it doesn't, create it first:
-#       aws route53 create-hosted-zone --name wareit.ai --caller-reference $(date +%s)
-#     Then update your domain registrar's NS records to point to Route 53.
+# After first apply:
+#   - Check `terraform output nameservers` for the NS records
+#   - Update your domain registrar (Porkbun) nameservers to those values
+#   - Wait for propagation (~15min–48h) before DNS records resolve publicly
 # =============================================================================
 
 # ---------------------------------------------------------------------------
-# Route 53 Hosted Zone — looked up via data source (must exist already)
+# Route 53 Hosted Zone — public zone (Terraform-managed)
 # ---------------------------------------------------------------------------
 
-data "aws_route53_zone" "main" {
-  name         = var.domain
-  private_zone = false
+resource "aws_route53_zone" "main" {
+  name = var.domain
+
+  tags = {
+    Name = "${local.name_prefix}-zone"
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -51,7 +53,7 @@ resource "aws_route53_record" "cert_validation" {
   records         = [each.value.record]
   ttl             = 60
   type            = each.value.type
-  zone_id         = data.aws_route53_zone.main.zone_id
+  zone_id         = aws_route53_zone.main.zone_id
 }
 
 # Wait for certificate validation to complete
@@ -66,7 +68,7 @@ resource "aws_acm_certificate_validation" "main" {
 
 # api.wareit.ai → ALB
 resource "aws_route53_record" "api" {
-  zone_id = data.aws_route53_zone.main.zone_id
+  zone_id = aws_route53_zone.main.zone_id
   name    = "api.${var.domain}"
   type    = "A"
 
@@ -82,7 +84,7 @@ resource "aws_route53_record" "api" {
 # This wildcard record ensures all of them resolve to the ALB,
 # where host-based listener rules route to the correct target group.
 resource "aws_route53_record" "gateway_wildcard" {
-  zone_id = data.aws_route53_zone.main.zone_id
+  zone_id = aws_route53_zone.main.zone_id
   name    = "*.gw.${var.domain}"
   type    = "A"
 

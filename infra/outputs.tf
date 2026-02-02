@@ -146,7 +146,12 @@ output "jwt_secret_arn" {
 
 output "route53_zone_id" {
   description = "Route 53 hosted zone ID for wareit.ai"
-  value       = data.aws_route53_zone.main.zone_id
+  value       = aws_route53_zone.main.zone_id
+}
+
+output "nameservers" {
+  description = "Route 53 nameservers — set these at your domain registrar (Porkbun)"
+  value       = aws_route53_zone.main.name_servers
 }
 
 output "acm_certificate_arn" {
