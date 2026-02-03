@@ -81,6 +81,19 @@ resource "aws_ecs_task_definition" "api" {
         { name = "API_PORT", value = "3001" },
         { name = "CORS_ORIGIN", value = "https://${var.domain}" },
         { name = "NODE_ENV", value = var.environment == "production" ? "production" : "development" },
+
+        # Tenant provisioner — ECS mode
+        { name = "ECS_CLUSTER_ARN", value = aws_ecs_cluster.main.arn },
+        { name = "HTTPS_LISTENER_ARN", value = aws_lb_listener.https.arn },
+        { name = "VPC_ID", value = aws_vpc.main.id },
+        { name = "PRIVATE_SUBNET_IDS", value = join(",", [for s in aws_subnet.private : s.id]) },
+        { name = "GATEWAY_SECURITY_GROUP_ID", value = aws_security_group.gateway.id },
+        { name = "GATEWAY_IMAGE", value = aws_ecr_repository.gateway.repository_url },
+        { name = "ECS_EXECUTION_ROLE_ARN", value = aws_iam_role.ecs_task_execution.arn },
+        { name = "ECS_GATEWAY_TASK_ROLE_ARN", value = aws_iam_role.gateway_task.arn },
+        { name = "GATEWAY_BASE_DOMAIN", value = "gw.${var.domain}" },
+        { name = "GATEWAY_LOG_GROUP", value = aws_cloudwatch_log_group.gateway.name },
+        { name = "AWS_REGION", value = local.region },
       ]
 
       # Sensitive values pulled from Secrets Manager at container start
