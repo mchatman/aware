@@ -17,10 +17,6 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.5"
     }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "~> 4.0"
-    }
   }
 
   # ---------------------------------------------------------------------------
@@ -87,6 +83,4 @@ locals {
 
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
-
-  eks_cluster_name = "${local.name_prefix}-eks"
 }

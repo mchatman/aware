@@ -101,35 +101,29 @@ variable "api_desired_count" {
 }
 
 # ---------------------------------------------------------------------------
-# EKS Cluster
+# Gateway EC2 Capacity
 # ---------------------------------------------------------------------------
 
-variable "eks_kubernetes_version" {
-  description = "Kubernetes version for the EKS cluster"
+variable "gateway_ec2_instance_type" {
+  description = "EC2 instance type for ECS gateway hosts"
   type        = string
-  default     = "1.31"
+  default     = "t3.small"
 }
 
-variable "eks_node_instance_types" {
-  description = "EC2 instance types for the EKS managed node group"
-  type        = list(string)
-  default     = ["t3.small"]
-}
-
-variable "eks_node_min_size" {
-  description = "Minimum number of nodes in the EKS node group"
+variable "gateway_ec2_min_size" {
+  description = "Minimum number of gateway EC2 instances"
   type        = number
   default     = 1
 }
 
-variable "eks_node_max_size" {
-  description = "Maximum number of nodes in the EKS node group"
+variable "gateway_ec2_max_size" {
+  description = "Maximum number of gateway EC2 instances"
   type        = number
   default     = 3
 }
 
-variable "eks_node_desired_size" {
-  description = "Desired number of nodes in the EKS node group"
+variable "gateway_ec2_desired_size" {
+  description = "Desired number of gateway EC2 instances"
   type        = number
   default     = 1
 }

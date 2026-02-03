@@ -86,12 +86,10 @@ resource "aws_ecs_task_definition" "api" {
         { name = "ECS_CLUSTER_ARN", value = aws_ecs_cluster.main.arn },
         { name = "HTTPS_LISTENER_ARN", value = aws_lb_listener.https.arn },
         { name = "VPC_ID", value = aws_vpc.main.id },
-        { name = "PRIVATE_SUBNET_IDS", value = join(",", [for s in aws_subnet.private : s.id]) },
-        { name = "GATEWAY_SECURITY_GROUP_ID", value = aws_security_group.gateway.id },
         { name = "GATEWAY_IMAGE", value = aws_ecr_repository.gateway.repository_url },
         { name = "ECS_EXECUTION_ROLE_ARN", value = aws_iam_role.ecs_task_execution.arn },
         { name = "ECS_GATEWAY_TASK_ROLE_ARN", value = aws_iam_role.gateway_task.arn },
-        { name = "GATEWAY_BASE_DOMAIN", value = "gw.${var.domain}" },
+        { name = "GATEWAY_BASE_DOMAIN", value = var.domain },
         { name = "GATEWAY_LOG_GROUP", value = aws_cloudwatch_log_group.gateway.name },
         { name = "AWS_REGION", value = local.region },
       ]
@@ -192,10 +190,8 @@ resource "aws_ecs_service" "api" {
 
 resource "aws_ecs_task_definition" "gateway_template" {
   family                   = "aware-gateway-template"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = var.gateway_cpu
-  memory                   = var.gateway_memory
+  requires_compatibilities = ["EC2"]
+  network_mode             = "bridge"
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.gateway_task.arn
 
@@ -204,6 +200,7 @@ resource "aws_ecs_task_definition" "gateway_template" {
       name      = "gateway"
       image     = "${aws_ecr_repository.gateway.repository_url}:${var.gateway_image_tag}"
       essential = true
+      memory    = 256
 
       # OpenClaw gateway command
       command = ["node", "dist/index.js", "gateway", "--bind", "lan", "--port", "18789"]
@@ -211,7 +208,7 @@ resource "aws_ecs_task_definition" "gateway_template" {
       portMappings = [
         {
           containerPort = 18789
-          hostPort      = 18789
+          hostPort      = 0 # Dynamic port — ALB routes via target group
           protocol      = "tcp"
         }
       ]
@@ -245,5 +242,92 @@ resource "aws_ecs_task_definition" "gateway_template" {
 
   tags = {
     Name = "aware-gateway-template"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# EC2 Capacity for Gateway Tasks
+# ---------------------------------------------------------------------------
+# Shared EC2 instance(s) that host tenant gateway containers.
+# ECS schedules multiple containers onto these instances.
+
+resource "aws_launch_template" "gateway_ec2" {
+  name_prefix   = "${local.name_prefix}-gw-"
+  image_id      = data.aws_ssm_parameter.ecs_ami.value
+  instance_type = var.gateway_ec2_instance_type
+
+  iam_instance_profile {
+    arn = aws_iam_instance_profile.ecs_ec2.arn
+  }
+
+  vpc_security_group_ids = [aws_security_group.gateway.id]
+
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    echo "ECS_CLUSTER=${aws_ecs_cluster.main.name}" >> /etc/ecs/ecs.config
+  EOF
+  )
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${local.name_prefix}-gateway"
+    }
+  }
+}
+
+# Latest ECS-optimized Amazon Linux 2023 AMI
+data "aws_ssm_parameter" "ecs_ami" {
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"
+}
+
+resource "aws_autoscaling_group" "gateway" {
+  name_prefix         = "${local.name_prefix}-gw-"
+  min_size            = var.gateway_ec2_min_size
+  max_size            = var.gateway_ec2_max_size
+  desired_capacity    = var.gateway_ec2_desired_size
+  vpc_zone_identifier = [for s in aws_subnet.private : s.id]
+
+  launch_template {
+    id      = aws_launch_template.gateway_ec2.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "${local.name_prefix}-gateway"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "AmazonECSManaged"
+    value               = "true"
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_ecs_capacity_provider" "gateway_ec2" {
+  name = "${local.name_prefix}-gateway-ec2"
+
+  auto_scaling_group_provider {
+    auto_scaling_group_arn         = aws_autoscaling_group.gateway.arn
+    managed_termination_protection = "DISABLED"
+
+    managed_scaling {
+      status                    = "ENABLED"
+      target_capacity           = 100
+      minimum_scaling_step_size = 1
+      maximum_scaling_step_size = 1
+    }
+  }
+}
+
+resource "aws_ecs_cluster_capacity_providers" "main" {
+  cluster_name       = aws_ecs_cluster.main.name
+  capacity_providers = [aws_ecs_capacity_provider.gateway_ec2.name, "FARGATE"]
+
+  default_capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.gateway_ec2.name
+    weight            = 1
   }
 }
