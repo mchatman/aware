@@ -587,65 +587,35 @@ export class TenantProvisioner {
     if (this.isECSConfigured()) {
       const cfg = this.ecsConfig!;
 
-      // 1. Scale down and delete ECS service
+      // 1. Scale down service first (fast operation)
       if (tenant.containerId) {
-        console.log(`[tenant-provisioner] Deleting ECS service: ${tenant.containerName}`);
+        console.log(`[tenant-provisioner] Scaling down ECS service: ${tenant.containerName}`);
         try {
-          await this.ecs!.send(
-            new UpdateServiceCommand({
-              cluster: cfg.clusterArn,
-              service: tenant.containerName,
-              desiredCount: 0,
-            }),
+          await this.withTimeout(
+            this.ecs!.send(
+              new UpdateServiceCommand({
+                cluster: cfg.clusterArn,
+                service: tenant.containerName,
+                desiredCount: 0,
+              }),
+            ),
+            10000, // 10 second timeout
           );
-        } catch {
-          // Service may already be scaled down — ignore
-        }
-        try {
-          await this.ecs!.send(
-            new DeleteServiceCommand({
-              cluster: cfg.clusterArn,
-              service: tenant.containerName,
-              force: true,
-            }),
-          );
-          console.log(`[tenant-provisioner] ECS service deleted: ${tenant.containerName}`);
         } catch (err) {
-          console.warn(`[tenant-provisioner] Failed to delete ECS service:`, err);
+          console.warn(`[tenant-provisioner] Failed to scale down service:`, err);
         }
-      }
 
-      // 2. Deregister task definition
-      const taskFamily = `aware-gw-${slug}`;
-      try {
-        console.log(`[tenant-provisioner] Deregistering task definition: ${taskFamily}`);
-        await this.ecs!.send(
-          new DeregisterTaskDefinitionCommand({
-            taskDefinition: `${taskFamily}:1`,
-          }),
-        );
-        console.log(`[tenant-provisioner] Task definition deregistered: ${taskFamily}`);
-      } catch (err) {
-        console.warn(`[tenant-provisioner] Failed to deregister task definition:`, err);
-      }
+        // Mark tenant as removing in DB immediately
+        const db = getDb();
+        await db
+          .update(tenants)
+          .set({ status: "removing", updatedAt: new Date() })
+          .where(eq(tenants.id, tenant.id));
 
-      // 3. Delete ALB listener rule + target group
-      await this.deleteListenerRuleForSlug(slug);
-      await this.deleteTargetGroupForSlug(slug);
-
-      // 4. Delete Secrets Manager secret
-      const secretName = `aware/gateway-token/${slug}`;
-      try {
-        console.log(`[tenant-provisioner] Deleting secret: ${secretName}`);
-        await this.secrets!.send(
-          new DeleteSecretCommand({
-            SecretId: secretName,
-            ForceDeleteWithoutRecovery: true,
-          }),
-        );
-        console.log(`[tenant-provisioner] Secret deleted: ${secretName}`);
-      } catch (err) {
-        console.warn(`[tenant-provisioner] Failed to delete secret:`, err);
+        // Start async cleanup (don't wait for completion)
+        this.cleanupTenantResources(cfg, tenant.containerName, slug).catch((err) => {
+          console.error(`[tenant-provisioner] Async cleanup failed for ${slug}:`, err);
+        });
       }
     } else {
       console.log(
@@ -653,10 +623,96 @@ export class TenantProvisioner {
       );
     }
 
-    // 5. Delete DB row
+    // Delete DB row immediately (tenant is marked as removing)
     const db = getDb();
     await db.delete(tenants).where(eq(tenants.id, tenant.id));
     console.log(`[tenant-provisioner] Tenant DB row deleted for ${slug}`);
+  }
+
+  /**
+   * Perform async cleanup of AWS resources for a tenant.
+   * This runs in the background and doesn't block the API response.
+   */
+  private async cleanupTenantResources(
+    cfg: ECSConfig,
+    containerName: string,
+    slug: string,
+  ): Promise<void> {
+    console.log(`[tenant-provisioner] Starting async cleanup for ${slug}`);
+
+    // 1. Delete ECS service (this can take several minutes)
+    try {
+      console.log(`[tenant-provisioner] Deleting ECS service: ${containerName}`);
+      await this.withTimeout(
+        this.ecs!.send(
+          new DeleteServiceCommand({
+            cluster: cfg.clusterArn,
+            service: containerName,
+            force: true,
+          }),
+        ),
+        120000, // 2 minute timeout
+      );
+      console.log(`[tenant-provisioner] ECS service deleted: ${containerName}`);
+    } catch (err) {
+      console.warn(`[tenant-provisioner] Failed to delete ECS service:`, err);
+    }
+
+    // 2. Deregister task definition
+    const taskFamily = `aware-gw-${slug}`;
+    try {
+      console.log(`[tenant-provisioner] Deregistering task definition: ${taskFamily}`);
+      await this.withTimeout(
+        this.ecs!.send(
+          new DeregisterTaskDefinitionCommand({
+            taskDefinition: `${taskFamily}:1`,
+          }),
+        ),
+        30000, // 30 second timeout
+      );
+      console.log(`[tenant-provisioner] Task definition deregistered: ${taskFamily}`);
+    } catch (err) {
+      console.warn(`[tenant-provisioner] Failed to deregister task definition:`, err);
+    }
+
+    // 3. Delete ALB listener rule + target group
+    try {
+      await this.withTimeout(this.deleteListenerRuleForSlug(slug), 30000);
+      await this.withTimeout(this.deleteTargetGroupForSlug(slug), 30000);
+    } catch (err) {
+      console.warn(`[tenant-provisioner] Failed to delete ALB resources:`, err);
+    }
+
+    // 4. Delete Secrets Manager secret
+    const secretName = `aware/gateway-token/${slug}`;
+    try {
+      console.log(`[tenant-provisioner] Deleting secret: ${secretName}`);
+      await this.withTimeout(
+        this.secrets!.send(
+          new DeleteSecretCommand({
+            SecretId: secretName,
+            ForceDeleteWithoutRecovery: true,
+          }),
+        ),
+        30000, // 30 second timeout
+      );
+      console.log(`[tenant-provisioner] Secret deleted: ${secretName}`);
+    } catch (err) {
+      console.warn(`[tenant-provisioner] Failed to delete secret:`, err);
+    }
+
+    console.log(`[tenant-provisioner] Async cleanup completed for ${slug}`);
+  }
+
+  /**
+   * Wrapper to add timeout to async operations.
+   */
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
+
+    return Promise.race([promise, timeoutPromise]);
   }
 
   /* ---------------------------------------------------------------- */
