@@ -13,8 +13,8 @@
 resource "random_password" "db_password" {
   length  = 32
   special = true
-  # RDS doesn't allow these characters in passwords
-  override_special = "!#$%&*()-_=+[]{}<>:?"
+  # Keep special chars simple — avoid URL-encoding nightmares in connection strings
+  override_special = "!#%()-_=+"
 }
 
 # JWT signing secret — auto-generated
@@ -42,9 +42,9 @@ resource "aws_secretsmanager_secret" "database_url" {
 resource "aws_secretsmanager_secret_version" "database_url" {
   secret_id = aws_secretsmanager_secret.database_url.id
   secret_string = format(
-    "postgresql://%s:%s@%s:%s/%s?sslmode=require",
+    "postgresql://%s:%s@%s:%s/%s?sslmode=no-verify",
     var.db_username,
-    random_password.db_password.result,
+    urlencode(random_password.db_password.result),
     aws_db_instance.main.address,
     aws_db_instance.main.port,
     var.db_name
