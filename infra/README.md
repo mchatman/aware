@@ -8,7 +8,7 @@ Terraform configuration for the Aware B2B voice AI platform on AWS.
                          ┌──────────────────────────┐
                          │       Route 53            │
                          │  api.wareit.ai            │
-                         │  *.gw.wareit.ai           │
+                         │  *.wareit.ai              │
                          └────────────┬─────────────┘
                                       │
                          ┌────────────▼─────────────┐
@@ -127,7 +127,7 @@ Tenant gateways are **not managed by Terraform**. The API provisioning service c
 
 1. Creates a Secrets Manager secret for the tenant's gateway token
 2. Registers a new ECS task definition (based on the template)
-3. Creates a target group and ALB listener rule (`gw-{slug}.wareit.ai`)
+3. Creates a target group and ALB listener rule (`{slug}.wareit.ai`)
 4. Creates an ECS service running the gateway container
 
 The API needs these Terraform outputs:

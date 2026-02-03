@@ -79,13 +79,14 @@ resource "aws_route53_record" "api" {
   }
 }
 
-# *.gw.wareit.ai → ALB (catches all tenant gateway subdomains)
-# Tenant gateways are addressed as gw-{slug}.wareit.ai
+# *.wareit.ai → ALB (catches all tenant gateway subdomains)
+# Tenant gateways are addressed as {slug}.wareit.ai
 # This wildcard record ensures all of them resolve to the ALB,
 # where host-based listener rules route to the correct target group.
+# Explicit records (api.wareit.ai, etc.) take priority over the wildcard.
 resource "aws_route53_record" "gateway_wildcard" {
   zone_id = aws_route53_zone.main.zone_id
-  name    = "*.gw.${var.domain}"
+  name    = "*.${var.domain}"
   type    = "A"
 
   alias {

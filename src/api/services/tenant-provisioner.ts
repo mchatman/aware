@@ -224,7 +224,7 @@ export class TenantProvisioner {
     }
 
     const port = await this.allocatePort();
-    const containerName = `aware-gw-${team.slug}`;
+    const containerName = team.slug;
     const gatewayToken = crypto.randomBytes(32).toString("hex");
     const imageTag = "latest";
 
@@ -260,7 +260,7 @@ export class TenantProvisioner {
 
     // --- ECS provisioning ---
     const cfg = this.ecsConfig!;
-    const gatewayUrl = `wss://gw-${team.slug}.${cfg.baseDomain}`;
+    const gatewayUrl = `wss://${team.slug}.${cfg.baseDomain}`;
 
     // Insert tenant row with status 'provisioning'
     const [tenant] = await db
@@ -295,7 +295,7 @@ export class TenantProvisioner {
       console.log(`[tenant-provisioner] Secret created: ${secretArn}`);
 
       // 2. Register ECS task definition for this tenant
-      const taskFamily = `aware-gw-${team.slug}`;
+      const taskFamily = team.slug;
       console.log(`[tenant-provisioner] Registering task definition: ${taskFamily}`);
 
       const environment: KeyValuePair[] = [
@@ -349,7 +349,7 @@ export class TenantProvisioner {
       console.log(`[tenant-provisioner] Task definition registered: ${taskDefArn}`);
 
       // 3. Create ALB target group
-      const tgName = `aware-gw-${team.slug}`.slice(0, 32); // ALB TG names max 32 chars
+      const tgName = team.slug.slice(0, 32); // ALB TG names max 32 chars
       console.log(`[tenant-provisioner] Creating target group: ${tgName}`);
 
       const tgResult = await this.elbv2!.send(
@@ -376,7 +376,7 @@ export class TenantProvisioner {
       console.log(`[tenant-provisioner] Target group created: ${tgArn}`);
 
       // 4. Create ALB listener rule (host-header based routing)
-      const hostHeader = `gw-${team.slug}.${cfg.baseDomain}`;
+      const hostHeader = `${team.slug}.${cfg.baseDomain}`;
       console.log(`[tenant-provisioner] Creating listener rule for: ${hostHeader}`);
 
       // Find the next available priority
@@ -409,7 +409,7 @@ export class TenantProvisioner {
       );
 
       // 5. Create ECS service
-      const serviceName = `aware-gw-${team.slug}`;
+      const serviceName = team.slug;
       console.log(`[tenant-provisioner] Creating ECS service: ${serviceName}`);
 
       const serviceResult = await this.ecs!.send(
@@ -582,7 +582,7 @@ export class TenantProvisioner {
    */
   async remove(teamId: string): Promise<void> {
     const tenant = await this.getTenant(teamId);
-    const slug = tenant.containerName.replace(/^aware-gw-/, "");
+    const slug = tenant.containerName;
 
     if (this.isECSConfigured()) {
       const cfg = this.ecsConfig!;
@@ -659,7 +659,7 @@ export class TenantProvisioner {
     }
 
     // 2. Deregister task definition
-    const taskFamily = `aware-gw-${slug}`;
+    const taskFamily = slug;
     try {
       console.log(`[tenant-provisioner] Deregistering task definition: ${taskFamily}`);
       await this.withTimeout(
@@ -872,11 +872,11 @@ export class TenantProvisioner {
 
   /**
    * Find and delete the ALB listener rule for a given tenant slug.
-   * Matches rules by host-header condition containing `gw-{slug}.{domain}`.
+   * Matches rules by host-header condition containing `{slug}.{domain}`.
    */
   private async deleteListenerRuleForSlug(slug: string): Promise<void> {
     const cfg = this.ecsConfig!;
-    const hostHeader = `gw-${slug}.${cfg.baseDomain}`;
+    const hostHeader = `${slug}.${cfg.baseDomain}`;
 
     try {
       console.log(`[tenant-provisioner] Looking up listener rule for: ${hostHeader}`);
@@ -904,10 +904,10 @@ export class TenantProvisioner {
 
   /**
    * Delete the ALB target group for a given tenant slug.
-   * Target group name: `aware-gw-{slug}` (truncated to 32 chars).
+   * Target group name: `{slug}` (truncated to 32 chars).
    */
   private async deleteTargetGroupForSlug(slug: string): Promise<void> {
-    const tgName = `aware-gw-${slug}`.slice(0, 32);
+    const tgName = slug.slice(0, 32);
 
     try {
       console.log(`[tenant-provisioner] Deleting target group: ${tgName}`);

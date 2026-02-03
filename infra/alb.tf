@@ -3,7 +3,7 @@
 # =============================================================================
 # Internet-facing ALB handling:
 #   - api.wareit.ai → API service (port 3001)
-#   - gw-{slug}.wareit.ai → tenant gateways (dynamic, managed by API)
+#   - {slug}.wareit.ai → tenant gateways (dynamic, managed by API)
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -134,7 +134,7 @@ resource "aws_lb_listener_rule" "api" {
 # ---------------------------------------------------------------------------
 # Each tenant gets:
 #   1. A target group (port 18789, target type IP)
-#   2. A listener rule: gw-{tenant-slug}.wareit.ai → their target group
+#   2. A listener rule: {slug}.wareit.ai → their target group
 #   3. An ECS service running their gateway container
 #
 # The API provisioning service creates these using the AWS SDK with:
@@ -147,12 +147,12 @@ resource "aws_lb_listener_rule" "api" {
 #
 # Example dynamic target group creation (pseudocode):
 #   aws elbv2 create-target-group \
-#     --name aware-gw-{slug} \
+#     --name {slug} \
 #     --protocol HTTP --port 18789 \
 #     --vpc-id {vpc_id} --target-type ip
 #
 #   aws elbv2 create-rule \
 #     --listener-arn {https_listener_arn} \
-#     --conditions Field=host-header,Values=gw-{slug}.wareit.ai \
+#     --conditions Field=host-header,Values={slug}.wareit.ai \
 #     --actions Type=forward,TargetGroupArn={tg_arn} \
 #     --priority {dynamic_priority}
