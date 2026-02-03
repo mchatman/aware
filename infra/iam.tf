@@ -165,14 +165,10 @@ resource "aws_iam_role_policy" "api_task_ecs" {
           "ecs:CreateService",
           "ecs:UpdateService",
           "ecs:DeleteService",
-          "ecs:DescribeServices"
+          "ecs:DescribeServices",
+          "ecs:TagResource"
         ]
         Resource = "*"
-        Condition = {
-          StringEquals = {
-            "aws:ResourceTag/Project" = "aware"
-          }
-        }
       },
       {
         Sid    = "PassRolesToTasks"
@@ -194,9 +190,23 @@ resource "aws_iam_role_policy" "api_task_ecs" {
           "elasticloadbalancing:CreateRule",
           "elasticloadbalancing:DeleteRule",
           "elasticloadbalancing:DescribeTargetGroups",
-          "elasticloadbalancing:DescribeRules"
+          "elasticloadbalancing:DescribeRules",
+          "elasticloadbalancing:DescribeListeners",
+          "elasticloadbalancing:ModifyRule",
+          "elasticloadbalancing:AddTags"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "ManageTenantSecrets"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:CreateSecret",
+          "secretsmanager:DeleteSecret",
+          "secretsmanager:UpdateSecret",
+          "secretsmanager:TagResource"
+        ]
+        Resource = "arn:aws:secretsmanager:${local.region}:${local.account_id}:secret:aware/gateway-token/*"
       }
     ]
   })

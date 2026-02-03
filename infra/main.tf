@@ -46,7 +46,8 @@ terraform {
 }
 
 provider "aws" {
-  region = var.region
+  region  = var.region
+  profile = "ware-prod-admin"
 
   default_tags {
     tags = {
