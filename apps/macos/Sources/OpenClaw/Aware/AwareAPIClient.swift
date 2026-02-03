@@ -33,7 +33,7 @@ enum AwareAPIError: Error, Sendable, LocalizedError {
 actor AwareAPIClient {
     static let shared = AwareAPIClient()
 
-    private var baseURL: String = "http://localhost:3001"
+    private var baseURL: String = "https://api.wareit.ai"
     private var accessToken: String?
 
     private let session: URLSession = {
