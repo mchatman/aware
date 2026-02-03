@@ -172,3 +172,38 @@ output "gateway_task_role_arn" {
   description = "Gateway task role ARN"
   value       = aws_iam_role.gateway_task.arn
 }
+
+# ---------------------------------------------------------------------------
+# EKS
+# ---------------------------------------------------------------------------
+
+output "eks_cluster_name" {
+  description = "EKS cluster name"
+  value       = aws_eks_cluster.main.name
+}
+
+output "eks_cluster_endpoint" {
+  description = "EKS cluster API endpoint"
+  value       = aws_eks_cluster.main.endpoint
+}
+
+output "eks_cluster_certificate_authority" {
+  description = "EKS cluster CA certificate (base64-encoded)"
+  value       = aws_eks_cluster.main.certificate_authority[0].data
+  sensitive   = true
+}
+
+output "eks_oidc_provider_arn" {
+  description = "EKS OIDC provider ARN (for IRSA role trust policies)"
+  value       = aws_iam_openid_connect_provider.eks.arn
+}
+
+output "eks_oidc_provider_url" {
+  description = "EKS OIDC provider URL (without https:// prefix)"
+  value       = replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")
+}
+
+output "eks_kubeconfig_command" {
+  description = "AWS CLI command to configure kubectl"
+  value       = "aws eks update-kubeconfig --region ${local.region} --name ${aws_eks_cluster.main.name}"
+}

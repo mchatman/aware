@@ -257,3 +257,105 @@ resource "aws_iam_role_policy" "gateway_task_logs" {
     ]
   })
 }
+
+# =============================================================================
+# EKS IAM Roles
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# EKS Cluster Role — assumed by the EKS control plane
+# ---------------------------------------------------------------------------
+
+resource "aws_iam_role" "eks_cluster" {
+  name = "${local.name_prefix}-eks-cluster"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "eks.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-eks-cluster"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+  role       = aws_iam_role.eks_cluster.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+
+# ---------------------------------------------------------------------------
+# EKS Node Group Role — assumed by EC2 instances in the managed node group
+# ---------------------------------------------------------------------------
+
+resource "aws_iam_role" "eks_node_group" {
+  name = "${local.name_prefix}-eks-node-group"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-eks-node-group"
+  }
+}
+
+# Worker node policy — allows nodes to connect to the EKS cluster
+resource "aws_iam_role_policy_attachment" "eks_node_worker" {
+  role       = aws_iam_role.eks_node_group.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+}
+
+# CNI policy — allows nodes to manage pod networking (VPC CNI plugin)
+resource "aws_iam_role_policy_attachment" "eks_node_cni" {
+  role       = aws_iam_role.eks_node_group.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+}
+
+# ECR read-only — allows nodes to pull container images from ECR
+resource "aws_iam_role_policy_attachment" "eks_node_ecr" {
+  role       = aws_iam_role.eks_node_group.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+# ---------------------------------------------------------------------------
+# API Task Role — EKS permissions for tenant provisioning
+# ---------------------------------------------------------------------------
+# The API ECS task needs to call eks:DescribeCluster to get the cluster
+# endpoint and CA cert for Kubernetes API authentication.
+
+resource "aws_iam_role_policy" "api_task_eks" {
+  name = "${local.name_prefix}-api-eks"
+  role = aws_iam_role.api_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "DescribeEKSCluster"
+        Effect = "Allow"
+        Action = [
+          "eks:DescribeCluster"
+        ]
+        Resource = "arn:aws:eks:${local.region}:${local.account_id}:cluster/${local.eks_cluster_name}"
+      }
+    ]
+  })
+}

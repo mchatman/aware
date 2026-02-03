@@ -11,7 +11,7 @@
 # ---------------------------------------------------------------------------
 
 resource "aws_ecs_cluster" "main" {
-  name = "${local.name_prefix}"
+  name = local.name_prefix
 
   setting {
     name  = "containerInsights"

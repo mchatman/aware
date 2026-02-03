@@ -99,3 +99,37 @@ variable "api_desired_count" {
   type        = number
   default     = 1
 }
+
+# ---------------------------------------------------------------------------
+# EKS Cluster
+# ---------------------------------------------------------------------------
+
+variable "eks_kubernetes_version" {
+  description = "Kubernetes version for the EKS cluster"
+  type        = string
+  default     = "1.31"
+}
+
+variable "eks_node_instance_types" {
+  description = "EC2 instance types for the EKS managed node group"
+  type        = list(string)
+  default     = ["t3.small"]
+}
+
+variable "eks_node_min_size" {
+  description = "Minimum number of nodes in the EKS node group"
+  type        = number
+  default     = 1
+}
+
+variable "eks_node_max_size" {
+  description = "Maximum number of nodes in the EKS node group"
+  type        = number
+  default     = 3
+}
+
+variable "eks_node_desired_size" {
+  description = "Desired number of nodes in the EKS node group"
+  type        = number
+  default     = 1
+}
