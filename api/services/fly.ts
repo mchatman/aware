@@ -1,0 +1,125 @@
+const BASE_URL = 'https://api.machines.dev/v1';
+
+function getHeaders(): Record<string, string> {
+  const token = process.env.FLY_API_TOKEN;
+  if (!token) throw new Error('FLY_API_TOKEN env var is required');
+  return {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+async function flyFetch(path: string, options: RequestInit = {}): Promise<any> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: { ...getHeaders(), ...(options.headers as Record<string, string>) },
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Fly API ${options.method ?? 'GET'} ${path} failed (${res.status}): ${body}`);
+  }
+
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+export async function createApp(appName: string, org: string): Promise<any> {
+  return flyFetch('/apps', {
+    method: 'POST',
+    body: JSON.stringify({ app_name: appName, org_slug: org }),
+  });
+}
+
+export async function createVolume(appName: string, region: string): Promise<any> {
+  return flyFetch(`/apps/${appName}/volumes`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: 'openclaw_data',
+      size_gb: 1,
+      region,
+    }),
+  });
+}
+
+interface CreateMachineOptions {
+  gatewayToken: string;
+  volumeId: string;
+  region: string;
+}
+
+export async function createMachine(appName: string, options: CreateMachineOptions): Promise<any> {
+  const image = process.env.GATEWAY_IMAGE ?? 'registry.fly.io/aware-gateway:latest';
+
+  return flyFetch(`/apps/${appName}/machines`, {
+    method: 'POST',
+    body: JSON.stringify({
+      region: options.region,
+      config: {
+        image,
+        guest: {
+          cpu_kind: 'shared',
+          cpus: 2,
+          memory_mb: 2048,
+        },
+        env: {
+          OPENCLAW_GATEWAY_TOKEN: options.gatewayToken,
+          OPENCLAW_STATE_DIR: '/data',
+          NODE_ENV: 'production',
+        },
+        mounts: [
+          {
+            volume: options.volumeId,
+            path: '/data',
+          },
+        ],
+        services: [
+          {
+            internal_port: 3000,
+            protocol: 'tcp',
+            ports: [
+              {
+                port: 443,
+                handlers: ['tls', 'http'],
+              },
+            ],
+          },
+        ],
+        processes: [
+          {
+            cmd: [
+              'node',
+              'dist/index.js',
+              'gateway',
+              '--allow-unconfigured',
+              '--port',
+              '3000',
+              '--bind',
+              'lan',
+            ],
+          },
+        ],
+      },
+    }),
+  });
+}
+
+export async function getMachine(appName: string, machineId: string): Promise<any> {
+  return flyFetch(`/apps/${appName}/machines/${machineId}`);
+}
+
+export async function startMachine(appName: string, machineId: string): Promise<any> {
+  return flyFetch(`/apps/${appName}/machines/${machineId}/start`, { method: 'POST' });
+}
+
+export async function stopMachine(appName: string, machineId: string): Promise<any> {
+  return flyFetch(`/apps/${appName}/machines/${machineId}/stop`, { method: 'POST' });
+}
+
+export async function destroyMachine(appName: string, machineId: string): Promise<any> {
+  return flyFetch(`/apps/${appName}/machines/${machineId}`, { method: 'DELETE' });
+}
+
+export async function destroyApp(appName: string): Promise<any> {
+  return flyFetch(`/apps/${appName}`, { method: 'DELETE' });
+}
