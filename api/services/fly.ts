@@ -79,26 +79,29 @@ export async function createMachine(appName: string, options: CreateMachineOptio
             protocol: 'tcp',
             ports: [
               {
+                port: 80,
+                handlers: ['http'],
+                force_https: true,
+              },
+              {
                 port: 443,
-                handlers: ['tls', 'http'],
+                handlers: ['http', 'tls'],
               },
             ],
           },
         ],
-        processes: [
-          {
-            cmd: [
-              'node',
-              'dist/index.js',
-              'gateway',
-              '--allow-unconfigured',
-              '--port',
-              '3000',
-              '--bind',
-              'lan',
-            ],
-          },
-        ],
+        init: {
+          cmd: [
+            'node',
+            'dist/index.js',
+            'gateway',
+            '--allow-unconfigured',
+            '--port',
+            '3000',
+            '--bind',
+            'lan',
+          ],
+        },
       },
     }),
   });
