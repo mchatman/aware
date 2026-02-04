@@ -26,6 +26,7 @@ router.get('/status', authMiddleware, async (req: AuthRequest, res) => {
       shortId: gateway.shortId,
       status: gateway.status,
       endpoint,
+      token: gateway.token,
       region: gateway.region,
       machineId: gateway.machineId,
       ready: gateway.status === 'running',

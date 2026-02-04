@@ -73,6 +73,7 @@ router.post('/signup', async (req, res) => {
         shortId: gateway.shortId,
         status: gateway.status,
         endpoint: deriveEndpoint(gateway.shortId),
+        token: gateway.token,
       },
     });
   } catch (err) {
@@ -115,6 +116,7 @@ router.post('/login', async (req, res) => {
             shortId: gateway.shortId,
             status: gateway.status,
             endpoint: deriveEndpoint(gateway.shortId),
+            token: gateway.token,
           }
         : null,
     });

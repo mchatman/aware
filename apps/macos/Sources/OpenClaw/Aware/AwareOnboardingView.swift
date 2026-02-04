@@ -1,5 +1,7 @@
 import AppKit
+import AVFoundation
 import OSLog
+import Speech
 import SwiftUI
 
 private let log = Logger(subsystem: "ai.aware", category: "onboarding.aware")
@@ -10,26 +12,24 @@ struct AwareOnboardingView: View {
     static let windowWidth: CGFloat = 460
     static let windowHeight: CGFloat = 520
 
-    @State private var step: OnboardingStep = .createTeam
-    @State private var teamName = ""
-    @State private var isLoading = false
-    @State private var error: String?
+    @State private var step: OnboardingStep = .welcome
+    @State private var micGranted = false
+    @State private var speechGranted = false
+    @State private var isRequesting = false
 
     var onComplete: (() -> Void)?
 
-    private var teamManager: AwareTeamManager { .shared }
-
     enum OnboardingStep {
-        case createTeam
-        case connectWorkspace
+        case welcome
+        case permissions
         case done
     }
 
     var body: some View {
         VStack(spacing: 0) {
             switch step {
-            case .createTeam: createTeamStep
-            case .connectWorkspace: connectWorkspaceStep
+            case .welcome: welcomeStep
+            case .permissions: permissionsStep
             case .done: doneStep
             }
         }
@@ -38,66 +38,97 @@ struct AwareOnboardingView: View {
         .background(.black.opacity(0.85))
     }
 
-    // MARK: Step 1 — Create Team
+    // MARK: Step 1 — Welcome
 
-    private var createTeamStep: some View {
+    private var welcomeStep: some View {
         VStack(spacing: 24) {
-            stepHeader(
-                icon: "person.3.fill",
-                title: "Create Your Team",
-                subtitle: "A team is your shared workspace for connectors, members, and billing."
-            )
+            Spacer()
 
-            TextField("Team name", text: $teamName)
-                .textFieldStyle(.roundedBorder)
+            Image(systemName: "waveform.circle.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.blue)
 
-            if let error {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-            }
+            Text("Welcome to Aware")
+                .font(.title.bold())
+                .foregroundStyle(.white)
+
+            Text("Your personal AI assistant, right in your menu bar. Talk to it with your voice or hold the right Option key.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
             Spacer()
 
-            Button(action: createTeam) {
-                if isLoading {
-                    ProgressView().controlSize(.small).frame(maxWidth: .infinity)
-                } else {
-                    Text("Create Team").frame(maxWidth: .infinity)
-                }
+            Button(action: { withAnimation { step = .permissions } }) {
+                Text("Get Started")
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .tint(.blue)
             .controlSize(.large)
-            .disabled(teamName.trimmingCharacters(in: .whitespaces).isEmpty || isLoading)
             .keyboardShortcut(.defaultAction)
         }
     }
 
-    // MARK: Step 2 — Connect Workspace
+    // MARK: Step 2 — Permissions
 
-    private var connectWorkspaceStep: some View {
+    private var permissionsStep: some View {
         VStack(spacing: 24) {
             stepHeader(
-                icon: "link.badge.plus",
-                title: "Connect Your Workspace",
-                subtitle: "Link Google or Microsoft to pull in your calendar, email, and documents."
+                icon: "lock.shield.fill",
+                title: "Permissions",
+                subtitle: "Aware needs microphone and speech recognition access for voice commands. Everything runs on-device."
             )
 
             VStack(spacing: 12) {
-                connectButton(provider: "google", label: "Connect Google Workspace", icon: "globe")
-                connectButton(provider: "microsoft", label: "Connect Microsoft 365", icon: "cloud")
+                permissionRow(
+                    icon: "mic.fill",
+                    label: "Microphone",
+                    granted: micGranted
+                )
+                permissionRow(
+                    icon: "waveform",
+                    label: "Speech Recognition",
+                    granted: speechGranted
+                )
+            }
+
+            if !micGranted || !speechGranted {
+                Button(action: requestPermissions) {
+                    if isRequesting {
+                        ProgressView().controlSize(.small).frame(maxWidth: .infinity)
+                    } else {
+                        Text("Grant Permissions")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                .controlSize(.large)
+                .disabled(isRequesting)
             }
 
             Spacer()
 
-            Button("Skip for now") {
-                withAnimation { step = .done }
+            if micGranted && speechGranted {
+                Button(action: { withAnimation { step = .done } }) {
+                    Text("Continue")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
+            } else {
+                Button("Skip for now") {
+                    withAnimation { step = .done }
+                }
+                .buttonStyle(.link)
+                .font(.caption)
             }
-            .buttonStyle(.link)
-            .font(.caption)
         }
+        .onAppear { checkPermissions() }
     }
 
     // MARK: Step 3 — Done
@@ -114,10 +145,11 @@ struct AwareOnboardingView: View {
                 .font(.title2.bold())
                 .foregroundStyle(.white)
 
-            Text("Aware is ready to help your team stay in sync.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            VStack(spacing: 8) {
+                tipRow(icon: "mic.fill", text: "Say a wake word to start talking")
+                tipRow(icon: "option", text: "Hold right Option for push-to-talk")
+            }
+            .padding(.top, 8)
 
             Spacer()
 
@@ -153,32 +185,64 @@ struct AwareOnboardingView: View {
         .padding(.bottom, 8)
     }
 
-    private func connectButton(provider: String, label: String, icon: String) -> some View {
-        Button {
-            Task { await teamManager.connectProvider(provider) }
-        } label: {
-            Label(label, systemImage: icon)
-                .frame(maxWidth: .infinity)
+    private func permissionRow(icon: String, label: String, granted: Bool) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(granted ? .green : .secondary)
+                .frame(width: 28)
+
+            Text(label)
+                .font(.body)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Image(systemName: granted ? "checkmark.circle.fill" : "circle")
+                .font(.title3)
+                .foregroundStyle(granted ? .green : .secondary)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
+        .padding(12)
+        .background(Color.secondary.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    private func createTeam() {
-        let trimmed = teamName.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
+    private func tipRow(icon: String, text: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.callout)
+                .foregroundStyle(.blue)
+                .frame(width: 24)
+            Text(text)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+    }
 
-        isLoading = true
-        error = nil
+    private func checkPermissions() {
+        micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        speechGranted = SFSpeechRecognizer.authorizationStatus() == .authorized
+    }
 
+    private func requestPermissions() {
+        isRequesting = true
         Task {
-            do {
-                _ = try await teamManager.createTeam(name: trimmed)
-                withAnimation { step = .connectWorkspace }
-            } catch {
-                self.error = error.localizedDescription
+            // Request microphone
+            let micResult = await AVCaptureDevice.requestAccess(for: .audio)
+            await MainActor.run { micGranted = micResult }
+
+            // Request speech recognition
+            await withCheckedContinuation { continuation in
+                SFSpeechRecognizer.requestAuthorization { status in
+                    Task { @MainActor in
+                        speechGranted = status == .authorized
+                        continuation.resume()
+                    }
+                }
             }
-            isLoading = false
+
+            await MainActor.run { isRequesting = false }
         }
     }
 }

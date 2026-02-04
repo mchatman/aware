@@ -5,13 +5,14 @@ import Security
 private let log = Logger(subsystem: "ai.aware", category: "auth")
 
 private let keychainService = "ai.aware.tokens"
-private let accessTokenKey = "aware.accessToken"
-private let refreshTokenKey = "aware.refreshToken"
+private let tokenKey = "aware.token"
+private let gatewayEndpointKey = "aware.gatewayEndpoint"
+private let gatewayTokenKey = "aware.gatewayToken"
 private let currentUserDefaultsKey = "aware.currentUser"
 
 // MARK: - Auth Manager
 
-/// Manages authentication state, token storage (Keychain), and automatic refresh.
+/// Manages authentication state, token storage (Keychain), and gateway info.
 ///
 /// All public API is `@MainActor` so SwiftUI views can observe changes directly.
 @MainActor
@@ -23,6 +24,12 @@ final class AwareAuthManager {
     private(set) var currentUser: Aware.User?
     private(set) var isLoading: Bool = false
     var error: String?
+
+    /// The gateway WebSocket endpoint (e.g. `wss://aw-xxxx.fly.dev`).
+    private(set) var gatewayEndpoint: String?
+
+    /// The token used to authenticate with the gateway WebSocket.
+    private(set) var gatewayToken: String?
 
     private let api = AwareAPIClient.shared
 
@@ -38,32 +45,48 @@ final class AwareAuthManager {
         // Restore cached user for instant UI while we validate.
         restoreCachedUser()
 
-        guard let storedRefresh = loadFromKeychain(key: refreshTokenKey) else {
-            log.info("No stored refresh token — user is signed out")
+        guard let storedToken = loadFromKeychain(key: tokenKey) else {
+            log.info("No stored token — user is signed out")
             clearSession()
             return
         }
 
-        // Try refreshing the access token.
+        // Set the token so the API client can make authenticated requests.
+        await api.setAccessToken(storedToken)
+
+        // Validate the token by calling /auth/me.
         do {
-            let auth = try await api.refreshToken(storedRefresh)
-            await applyAuth(auth)
-            log.info("Session restored via token refresh")
+            let me = try await api.getMe()
+            currentUser = me.user
+            isAuthenticated = true
+            cacheUser(me.user)
+
+            // Restore gateway info from keychain.
+            gatewayEndpoint = loadFromKeychain(key: gatewayEndpointKey)
+            gatewayToken = loadFromKeychain(key: gatewayTokenKey)
+
+            // Update gateway info from /auth/me response if available.
+            if let gateway = me.gateway {
+                gatewayEndpoint = gateway.endpoint
+                saveToKeychain(key: gatewayEndpointKey, value: gateway.endpoint)
+            }
+
+            log.info("Session restored via /auth/me")
         } catch {
-            log.warning("Token refresh failed: \(error.localizedDescription, privacy: .public)")
+            log.warning("Token validation failed: \(error.localizedDescription, privacy: .public)")
             clearSession()
         }
     }
 
     // MARK: Auth Actions
 
-    func register(email: String, password: String, name: String) async {
+    func register(email: String, password: String) async {
         isLoading = true
         error = nil
         defer { isLoading = false }
 
         do {
-            let auth = try await api.register(email: email, password: password, name: name)
+            let auth = try await api.register(email: email, password: password)
             await applyAuth(auth)
             log.info("Registered as \(email, privacy: .public)")
         } catch {
@@ -87,61 +110,58 @@ final class AwareAuthManager {
         }
     }
 
-    func logout() async {
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            try await api.logout()
-        } catch {
-            // Best-effort — clear local state regardless.
-            log.warning("Server logout failed: \(error.localizedDescription, privacy: .public)")
-        }
-
+    func logout() {
         clearSession()
         log.info("Logged out")
     }
 
-    /// Attempts to refresh the access token.  Returns `true` on success.
-    @discardableResult
-    func refreshTokenIfNeeded() async -> Bool {
-        guard let storedRefresh = loadFromKeychain(key: refreshTokenKey) else {
-            return false
-        }
+    /// Updates stored gateway info (called after polling gateway status).
+    func updateGateway(_ gateway: Aware.Gateway) {
+        gatewayEndpoint = gateway.endpoint
+        saveToKeychain(key: gatewayEndpointKey, value: gateway.endpoint)
 
-        do {
-            let auth = try await api.refreshToken(storedRefresh)
-            await applyAuth(auth)
-            return true
-        } catch {
-            log.warning("Refresh failed: \(error.localizedDescription, privacy: .public)")
-            return false
+        if let token = gateway.token {
+            gatewayToken = token
+            saveToKeychain(key: gatewayTokenKey, value: token)
         }
     }
 
     // MARK: - Private Helpers
 
     private func applyAuth(_ auth: Aware.AuthResponse) async {
-        saveToKeychain(key: accessTokenKey, value: auth.accessToken)
-        saveToKeychain(key: refreshTokenKey, value: auth.refreshToken)
+        saveToKeychain(key: tokenKey, value: auth.token)
         cacheUser(auth.user)
 
-        await api.setAccessToken(auth.accessToken)
+        await api.setAccessToken(auth.token)
 
         currentUser = auth.user
         isAuthenticated = true
         error = nil
+
+        // Store gateway info if present.
+        if let gateway = auth.gateway {
+            gatewayEndpoint = gateway.endpoint
+            saveToKeychain(key: gatewayEndpointKey, value: gateway.endpoint)
+
+            if let token = gateway.token {
+                gatewayToken = token
+                saveToKeychain(key: gatewayTokenKey, value: token)
+            }
+        }
     }
 
     private func clearSession() {
-        deleteFromKeychain(key: accessTokenKey)
-        deleteFromKeychain(key: refreshTokenKey)
+        deleteFromKeychain(key: tokenKey)
+        deleteFromKeychain(key: gatewayEndpointKey)
+        deleteFromKeychain(key: gatewayTokenKey)
         UserDefaults.standard.removeObject(forKey: currentUserDefaultsKey)
 
         Task { await api.setAccessToken(nil) }
 
         currentUser = nil
         isAuthenticated = false
+        gatewayEndpoint = nil
+        gatewayToken = nil
     }
 
     private func friendlyError(_ error: Error) -> String {
@@ -154,18 +174,14 @@ final class AwareAuthManager {
     // MARK: User Cache (UserDefaults)
 
     private func cacheUser(_ user: Aware.User) {
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        if let data = try? encoder.encode(user) {
+        if let data = try? JSONEncoder().encode(user) {
             UserDefaults.standard.set(data, forKey: currentUserDefaultsKey)
         }
     }
 
     private func restoreCachedUser() {
         guard let data = UserDefaults.standard.data(forKey: currentUserDefaultsKey) else { return }
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        currentUser = try? decoder.decode(Aware.User.self, from: data)
+        currentUser = try? JSONDecoder().decode(Aware.User.self, from: data)
     }
 
     // MARK: Keychain
