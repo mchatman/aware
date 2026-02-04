@@ -31,6 +31,19 @@ export async function createApp(appName: string, org: string): Promise<any> {
   });
 }
 
+export async function allocateIps(appName: string): Promise<void> {
+  // Shared IPv4
+  await flyFetch(`/apps/${appName}/ips`, {
+    method: 'POST',
+    body: JSON.stringify({ type: 'shared_v4' }),
+  });
+  // Dedicated IPv6
+  await flyFetch(`/apps/${appName}/ips`, {
+    method: 'POST',
+    body: JSON.stringify({ type: 'v6' }),
+  });
+}
+
 export async function createVolume(appName: string, region: string): Promise<any> {
   return flyFetch(`/apps/${appName}/volumes`, {
     method: 'POST',
