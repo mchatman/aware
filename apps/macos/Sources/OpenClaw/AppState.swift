@@ -238,7 +238,7 @@ final class AppState {
         self.launchAtLogin = false
         self.onboardingSeen = onboardingSeen
         self.debugPaneEnabled = UserDefaults.standard.bool(forKey: debugPaneEnabledKey)
-        let savedVoiceWake = UserDefaults.standard.bool(forKey: swabbleEnabledKey)
+        let savedVoiceWake = UserDefaults.standard.object(forKey: swabbleEnabledKey) as? Bool ?? true
         self.swabbleEnabled = voiceWakeSupported ? savedVoiceWake : false
         self.swabbleTriggerWords = UserDefaults.standard
             .stringArray(forKey: swabbleTriggersKey) ?? defaultVoiceWakeTriggers
@@ -261,7 +261,7 @@ final class AppState {
         self.voiceWakeAdditionalLocaleIDs = UserDefaults.standard
             .stringArray(forKey: voiceWakeAdditionalLocalesKey) ?? []
         self.voicePushToTalkEnabled = UserDefaults.standard
-            .object(forKey: voicePushToTalkEnabledKey) as? Bool ?? false
+            .object(forKey: voicePushToTalkEnabledKey) as? Bool ?? true
         self.talkEnabled = UserDefaults.standard.bool(forKey: talkEnabledKey)
         self.seamColorHex = nil
         if let storedHeartbeats = UserDefaults.standard.object(forKey: heartbeatsEnabledKey) as? Bool {
