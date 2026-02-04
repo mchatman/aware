@@ -1,0 +1,25 @@
+{
+  "agents": {
+    "defaults": {
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
+    }
+  },
+  "messages": {
+    "ackReactionScope": "group-mentions",
+    "tts": {
+      "auto": "always",
+      "provider": "edge",
+      "edge": {
+        "voice": "en-US-GuyNeural",
+        "rate": "+5%"
+      }
+    }
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto"
+  }
+}

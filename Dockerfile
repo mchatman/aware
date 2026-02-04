@@ -32,6 +32,10 @@ RUN pnpm ui:build
 
 ENV NODE_ENV=production
 
+# Copy seed config for first-boot defaults (TTS, etc.)
+COPY config/seed.json ./config/seed.json
+COPY config/entrypoint.sh ./config/entrypoint.sh
+
 # Security hardening: Run as non-root user
 # The node:22-bookworm image includes a 'node' user (uid 1000)
 # This reduces the attack surface by preventing container escape via root privileges
