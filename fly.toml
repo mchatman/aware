@@ -1,8 +1,8 @@
 # OpenClaw Fly.io deployment configuration
 # See https://fly.io/docs/reference/configuration/
 
-app = "aware-gateway"
-primary_region = "sjc"  # San Jose — closest to PST
+app = "openclaw"
+primary_region = "iad"  # change to your closest region
 
 [build]
   dockerfile = "Dockerfile"
