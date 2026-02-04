@@ -32,16 +32,37 @@ export async function createApp(appName: string, org: string): Promise<any> {
 }
 
 export async function allocateIps(appName: string): Promise<void> {
+  const token = process.env.FLY_API_TOKEN;
+  if (!token) throw new Error('FLY_API_TOKEN env var is required');
+
+  const graphql = async (query: string, variables: Record<string, unknown>) => {
+    const res = await fetch('https://api.fly.io/graphql', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+    const body = await res.json();
+    if (body.errors?.length) {
+      throw new Error(`Fly GraphQL error: ${JSON.stringify(body.errors)}`);
+    }
+    return body.data;
+  };
+
+  const mutation = `
+    mutation($input: AllocateIPAddressInput!) {
+      allocateIpAddress(input: $input) {
+        ipAddress { id address type }
+      }
+    }
+  `;
+
   // Shared IPv4
-  await flyFetch(`/apps/${appName}/ips`, {
-    method: 'POST',
-    body: JSON.stringify({ type: 'shared_v4' }),
-  });
+  await graphql(mutation, { input: { appId: appName, type: 'shared_v4' } });
   // Dedicated IPv6
-  await flyFetch(`/apps/${appName}/ips`, {
-    method: 'POST',
-    body: JSON.stringify({ type: 'v6' }),
-  });
+  await graphql(mutation, { input: { appId: appName, type: 'v6' } });
 }
 
 export async function createVolume(appName: string, region: string): Promise<any> {
