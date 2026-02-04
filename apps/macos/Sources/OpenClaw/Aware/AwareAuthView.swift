@@ -13,7 +13,6 @@ struct AwareAuthView: View {
     @State private var mode: AuthMode = .login
     @State private var email = ""
     @State private var password = ""
-    @State private var name = ""
 
     var onAuthenticated: (() -> Void)?
 
@@ -55,12 +54,6 @@ struct AwareAuthView: View {
 
     private var form: some View {
         VStack(spacing: 16) {
-            if mode == .register {
-                TextField("Name", text: $name)
-                    .textFieldStyle(.roundedBorder)
-                    .textContentType(.name)
-            }
-
             TextField("Email", text: $email)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.emailAddress)
@@ -121,10 +114,7 @@ struct AwareAuthView: View {
 
     private var isFormValid: Bool {
         let hasEmail = !email.trimmingCharacters(in: .whitespaces).isEmpty
-        let hasPassword = password.count >= 6
-        if mode == .register {
-            return hasEmail && hasPassword && !name.trimmingCharacters(in: .whitespaces).isEmpty
-        }
+        let hasPassword = password.count >= 8
         return hasEmail && hasPassword
     }
 
@@ -133,8 +123,7 @@ struct AwareAuthView: View {
             if mode == .register {
                 await auth.register(
                     email: email.trimmingCharacters(in: .whitespaces),
-                    password: password,
-                    name: name.trimmingCharacters(in: .whitespaces)
+                    password: password
                 )
             } else {
                 await auth.login(

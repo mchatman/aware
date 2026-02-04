@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { gateways } from '../db/schema.js';
-import { createApp, createVolume, createMachine } from './fly.js';
+import { createApp, allocateIps, createVolume, createMachine } from './fly.js';
 
 const FLY_ORG = process.env.FLY_ORG ?? 'ware-295';
 
@@ -17,6 +17,9 @@ export async function provisionGateway(
   try {
     console.log(`[provisioner] Creating Fly app: ${appName}`);
     await createApp(appName, FLY_ORG);
+
+    console.log(`[provisioner] Allocating IPs for ${appName}`);
+    await allocateIps(appName);
 
     console.log(`[provisioner] Creating volume in ${appName} (region: ${region})`);
     const volume = await createVolume(appName, region);

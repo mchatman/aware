@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { nanoid } from 'nanoid';
+import { customAlphabet } from 'nanoid';
+
+const nanoid = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 8);
 import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
@@ -71,6 +73,7 @@ router.post('/signup', async (req, res) => {
         shortId: gateway.shortId,
         status: gateway.status,
         endpoint: deriveEndpoint(gateway.shortId),
+        token: gateway.token,
       },
     });
   } catch (err) {
@@ -113,6 +116,7 @@ router.post('/login', async (req, res) => {
             shortId: gateway.shortId,
             status: gateway.status,
             endpoint: deriveEndpoint(gateway.shortId),
+            token: gateway.token,
           }
         : null,
     });

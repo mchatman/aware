@@ -3,7 +3,7 @@ import OSLog
 
 private let log = Logger(subsystem: "ai.aware", category: "coordinator")
 
-/// Coordinates the Aware app lifecycle: auth → onboarding → main app.
+/// Coordinates the Aware app lifecycle: auth → gateway polling → connect.
 ///
 /// Called from `AppDelegate.applicationDidFinishLaunching` instead of
 /// the default OpenClaw onboarding flow.
@@ -12,7 +12,8 @@ final class AwareAppCoordinator {
     static let shared = AwareAppCoordinator()
 
     private let auth = AwareAuthManager.shared
-    private let teams = AwareTeamManager.shared
+    private let api = AwareAPIClient.shared
+    private var pollingTask: Task<Void, Never>?
 
     /// Entry point — call once at app launch.
     func start() {
@@ -23,7 +24,7 @@ final class AwareAppCoordinator {
             await auth.initialize()
 
             if auth.isAuthenticated {
-                log.info("Session restored — checking team setup")
+                log.info("Session restored — checking gateway")
                 await proceedAfterAuth()
             } else {
                 log.info("No session — showing auth window")
@@ -46,30 +47,47 @@ final class AwareAppCoordinator {
     // MARK: - Post-Auth
 
     private func proceedAfterAuth() async {
-        // Load teams for the authenticated user.
-        await teams.loadTeams()
+        // Fetch gateway status to get the latest info (including token).
+        do {
+            let gateway = try await api.getGatewayStatus()
+            auth.updateGateway(gateway)
 
-        if teams.teams.isEmpty {
-            // New user — needs onboarding (create team, connect workspace).
-            log.info("No teams found — showing onboarding")
-            showOnboarding()
-        } else {
-            // Existing user — select their team and proceed.
-            if let team = teams.teams.first {
-                log.info("Selecting team: \(team.name, privacy: .public)")
-                await teams.selectTeam(team)
+            if gateway.status == "running" {
+                log.info("Gateway is running — connecting")
+                enterMainApp()
+            } else {
+                log.info("Gateway status: \(gateway.status, privacy: .public) — polling")
+                startGatewayPolling()
             }
-            enterMainApp()
+        } catch {
+            log.warning("Gateway status check failed: \(error.localizedDescription, privacy: .public) — polling")
+            startGatewayPolling()
         }
     }
 
-    // MARK: - Onboarding
+    // MARK: - Gateway Polling
 
-    private func showOnboarding() {
-        AwareOnboardingWindowController.shared.show { [weak self] in
-            log.info("Onboarding complete")
-            Task { @MainActor in
-                self?.enterMainApp()
+    private func startGatewayPolling() {
+        pollingTask?.cancel()
+        pollingTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+                guard !Task.isCancelled else { break }
+
+                do {
+                    let gateway = try await api.getGatewayStatus()
+                    auth.updateGateway(gateway)
+
+                    if gateway.status == "running" {
+                        log.info("Gateway is now running — connecting")
+                        enterMainApp()
+                        return
+                    }
+
+                    log.debug("Gateway status: \(gateway.status, privacy: .public) — continuing poll")
+                } catch {
+                    log.warning("Gateway poll failed: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }
@@ -77,6 +95,9 @@ final class AwareAppCoordinator {
     // MARK: - Main App
 
     private func enterMainApp() {
+        pollingTask?.cancel()
+        pollingTask = nil
+
         log.info("Entering main app")
 
         // Mark OpenClaw onboarding as seen so it never triggers.
@@ -84,40 +105,44 @@ final class AwareAppCoordinator {
         UserDefaults.standard.set(currentOnboardingVersion, forKey: onboardingVersionKey)
         AppStateStore.shared.onboardingSeen = true
 
-        // Close any lingering auth/onboarding windows.
+        // Close any lingering auth windows.
         AwareAuthWindowController.shared.close()
-        AwareOnboardingWindowController.shared.close()
 
-        // Connect to the team's tenant gateway.
-        connectToTenantGateway()
+        // Connect to the user's gateway.
+        connectToGateway()
     }
 
     // MARK: - Gateway Connection
 
-    private func connectToTenantGateway() {
-        guard let team = teams.currentTeam else {
-            log.warning("No current team — skipping gateway connection")
+    private func connectToGateway() {
+        guard let endpoint = auth.gatewayEndpoint, !endpoint.isEmpty else {
+            log.warning("No gateway endpoint — skipping connection")
             return
         }
 
-        guard let gatewayUrl = team.gatewayUrl,
-              !gatewayUrl.isEmpty,
-              team.tenantStatus == "running" else {
-            log.info("Tenant not ready (status: \(team.tenantStatus ?? "none", privacy: .public)) — skipping gateway connection")
-            return
-        }
-
-        // Convert HTTP URL to WebSocket URL for the gateway connection.
-        let wsUrl = gatewayUrl
+        // Convert HTTPS endpoint to WSS for WebSocket connection.
+        let wsUrl = endpoint
             .replacingOccurrences(of: "http://", with: "ws://")
             .replacingOccurrences(of: "https://", with: "wss://")
 
-        log.info("Connecting to tenant gateway: \(wsUrl, privacy: .public)")
+        log.info("Connecting to gateway: \(wsUrl, privacy: .public)")
 
-        // Configure the app to connect to the tenant gateway in direct/remote mode.
+        // Write gateway config so the connection system can resolve the token.
+        OpenClawConfigFile.updateGatewayDict { gateway in
+            var remote = gateway["remote"] as? [String: Any] ?? [:]
+            remote["url"] = wsUrl
+            remote["transport"] = "direct"
+            if let token = self.auth.gatewayToken {
+                remote["token"] = token
+            }
+            gateway["remote"] = remote
+        }
+
+        // Configure the app to connect to the gateway in remote/direct mode.
         let state = AppStateStore.shared
         state.connectionMode = .remote
         state.remoteUrl = wsUrl
+        state.remoteTransport = .direct
 
         Task {
             await ConnectionModeCoordinator.shared.apply(mode: .remote, paused: state.isPaused)
