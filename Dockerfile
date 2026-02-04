@@ -41,4 +41,5 @@ COPY config/entrypoint.sh ./config/entrypoint.sh
 # This reduces the attack surface by preventing container escape via root privileges
 USER node
 
+ENTRYPOINT ["/app/config/entrypoint.sh"]
 CMD ["node", "dist/index.js"]

@@ -15,7 +15,7 @@ primary_region = "sjc"  # San Jose — closest to PST
   NODE_OPTIONS = "--max-old-space-size=1536"
 
 [processes]
-  app = "/app/config/entrypoint.sh"
+  app = "node dist/index.js gateway --allow-unconfigured --port 3000 --bind lan"
 
 [http_service]
   internal_port = 3000
