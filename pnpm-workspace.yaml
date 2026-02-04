@@ -3,7 +3,7 @@ packages:
   - ui
   - packages/*
   - extensions/*
-  - control-plane
+  - api
 
 onlyBuiltDependencies:
   - '@whiskeysockets/baileys'
