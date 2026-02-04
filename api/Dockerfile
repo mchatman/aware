@@ -4,7 +4,11 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --production=false
 COPY tsconfig.json ./
-COPY src ./src
+COPY db ./db
+COPY routes ./routes
+COPY services ./services
+COPY middleware ./middleware
+COPY index.ts ./
 RUN npx tsc
 
 FROM node:22-slim

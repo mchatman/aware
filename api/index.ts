@@ -18,5 +18,5 @@ app.use('/auth', authRoutes);
 app.use('/gateway', gatewayRoutes);
 
 app.listen(PORT, () => {
-  console.log(`[control-plane] Listening on port ${PORT}`);
+  console.log(`[api] Listening on port ${PORT}`);
 });
