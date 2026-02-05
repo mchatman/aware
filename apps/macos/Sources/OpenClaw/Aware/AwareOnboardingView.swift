@@ -16,12 +16,18 @@ struct AwareOnboardingView: View {
     @State private var micGranted = false
     @State private var speechGranted = false
     @State private var isRequesting = false
+    @State private var googleConnected = false
+    @State private var googleEmail: String?
+    @State private var isPollingGoogle = false
 
     var onComplete: (() -> Void)?
+
+    private let api = AwareAPIClient.shared
 
     enum OnboardingStep {
         case welcome
         case permissions
+        case google
         case done
     }
 
@@ -30,6 +36,7 @@ struct AwareOnboardingView: View {
             switch step {
             case .welcome: welcomeStep
             case .permissions: permissionsStep
+            case .google: googleStep
             case .done: doneStep
             }
         }
@@ -112,7 +119,7 @@ struct AwareOnboardingView: View {
             Spacer()
 
             if micGranted && speechGranted {
-                Button(action: { withAnimation { step = .done } }) {
+                Button(action: { withAnimation { step = .google } }) {
                     Text("Continue")
                         .frame(maxWidth: .infinity)
                 }
@@ -122,7 +129,7 @@ struct AwareOnboardingView: View {
                 .keyboardShortcut(.defaultAction)
             } else {
                 Button("Skip for now") {
-                    withAnimation { step = .done }
+                    withAnimation { step = .google }
                 }
                 .buttonStyle(.link)
                 .font(.caption)
@@ -131,7 +138,99 @@ struct AwareOnboardingView: View {
         .onAppear { checkPermissions() }
     }
 
-    // MARK: Step 3 — Done
+    // MARK: Step 3 — Google
+
+    private var googleStep: some View {
+        VStack(spacing: 24) {
+            stepHeader(
+                icon: "envelope.fill",
+                title: "Connect Google",
+                subtitle: "Link your Google account to access Gmail, Calendar, Drive, and Contacts through Aware."
+            )
+
+            if googleConnected {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.green)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Connected")
+                            .font(.body.bold())
+                            .foregroundStyle(.white)
+                        if let email = googleEmail {
+                            Text(email)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+                }
+                .padding(12)
+                .background(Color.secondary.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                Button(action: connectGoogle) {
+                    if isPollingGoogle {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Waiting for Google…")
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        HStack(spacing: 8) {
+                            Image(systemName: "link")
+                            Text("Connect Google Account")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                .controlSize(.large)
+                .disabled(isPollingGoogle)
+            }
+
+            Spacer()
+
+            Button(action: { withAnimation { step = .done } }) {
+                Text(googleConnected ? "Continue" : "Skip for now")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(googleConnected ? .borderedProminent : .bordered)
+            .tint(googleConnected ? .blue : .secondary)
+            .controlSize(.large)
+            .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    private func connectGoogle() {
+        Task {
+            guard let url = await api.googleAuthURL(),
+                  let nsUrl = URL(string: url) else { return }
+
+            NSWorkspace.shared.open(nsUrl)
+            isPollingGoogle = true
+
+            // Poll for connection status.
+            while !googleConnected {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                do {
+                    let status = try await api.getGoogleStatus()
+                    if status.connected {
+                        googleConnected = true
+                        googleEmail = status.email
+                        isPollingGoogle = false
+                    }
+                } catch {
+                    log.warning("Google status poll failed: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        }
+    }
+
+    // MARK: Step 4 — Done
 
     private var doneStep: some View {
         VStack(spacing: 24) {

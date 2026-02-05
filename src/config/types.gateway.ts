@@ -241,4 +241,10 @@ export type GatewayConfig = {
    * `x-real-ip`) to determine the client IP for local pairing and HTTP checks.
    */
   trustedProxies?: string[];
+  /**
+   * When true, all device pairing requests are auto-approved without manual
+   * operator intervention. Useful for managed/hosted deployments where the
+   * control plane handles auth and each tenant owns their gateway.
+   */
+  autoApproveDevices?: boolean;
 };

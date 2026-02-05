@@ -23,6 +23,10 @@ struct SettingsRootView: View {
                 self.nixManagedBanner
             }
             TabView(selection: self.$selectedTab) {
+                AwareAccountSettings()
+                    .tabItem { Label("Account", systemImage: "person.crop.circle") }
+                    .tag(SettingsTab.account)
+
                 GeneralSettings(state: self.state)
                     .tabItem { Label("General", systemImage: "gearshape") }
                     .tag(SettingsTab.general)
@@ -176,11 +180,12 @@ struct SettingsRootView: View {
 }
 
 enum SettingsTab: CaseIterable {
-    case general, channels, skills, sessions, cron, config, instances, voiceWake, permissions, debug, about
+    case account, general, channels, skills, sessions, cron, config, instances, voiceWake, permissions, debug, about
     static let windowWidth: CGFloat = 824 // wider
     static let windowHeight: CGFloat = 790 // +10% (more room)
     var title: String {
         switch self {
+        case .account: "Account"
         case .general: "General"
         case .channels: "Channels"
         case .skills: "Skills"
@@ -197,6 +202,7 @@ enum SettingsTab: CaseIterable {
 
     var systemImage: String {
         switch self {
+        case .account: "person.crop.circle"
         case .general: "gearshape"
         case .channels: "link"
         case .skills: "sparkles"

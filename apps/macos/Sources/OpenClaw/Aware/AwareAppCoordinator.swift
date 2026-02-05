@@ -53,8 +53,8 @@ final class AwareAppCoordinator {
             auth.updateGateway(gateway)
 
             if gateway.status == "running" {
-                log.info("Gateway is running — connecting")
-                enterMainApp()
+                log.info("Gateway is running — checking onboarding")
+                await checkOnboardingThenConnect()
             } else {
                 log.info("Gateway status: \(gateway.status, privacy: .public) — polling")
                 startGatewayPolling()
@@ -62,6 +62,29 @@ final class AwareAppCoordinator {
         } catch {
             log.warning("Gateway status check failed: \(error.localizedDescription, privacy: .public) — polling")
             startGatewayPolling()
+        }
+    }
+
+    // MARK: - Onboarding
+
+    private static let onboardingCompleteKey = "aware.onboardingComplete"
+
+    private func checkOnboardingThenConnect() async {
+        let onboardingDone = UserDefaults.standard.bool(forKey: Self.onboardingCompleteKey)
+
+        if onboardingDone {
+            enterMainApp()
+        } else {
+            log.info("Showing Aware onboarding")
+            showOnboarding()
+        }
+    }
+
+    private func showOnboarding() {
+        AwareOnboardingWindowController.shared.show { [weak self] in
+            UserDefaults.standard.set(true, forKey: Self.onboardingCompleteKey)
+            log.info("Onboarding complete")
+            self?.enterMainApp()
         }
     }
 
@@ -79,8 +102,8 @@ final class AwareAppCoordinator {
                     auth.updateGateway(gateway)
 
                     if gateway.status == "running" {
-                        log.info("Gateway is now running — connecting")
-                        enterMainApp()
+                        log.info("Gateway is now running — checking onboarding")
+                        await checkOnboardingThenConnect()
                         return
                     }
 

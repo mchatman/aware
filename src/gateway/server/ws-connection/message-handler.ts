@@ -634,7 +634,7 @@ export function attachGatewayWsMessageHandler(params: {
               role,
               scopes,
               remoteIp: reportedClientIp,
-              silent: isLocalClient,
+              silent: isLocalClient || configSnapshot.gateway?.autoApproveDevices === true,
             });
             const context = buildRequestContext();
             if (pairing.request.silent === true) {
