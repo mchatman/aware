@@ -1,8 +1,31 @@
+## Stage 1: Build gog-token-sync
+FROM golang:1.21-bookworm AS gog-token-sync-builder
+WORKDIR /build
+COPY tools/gog-token-sync/go.mod tools/gog-token-sync/go.sum ./
+RUN go mod download
+COPY tools/gog-token-sync/main.go ./
+RUN CGO_ENABLED=0 go build -o gog-token-sync .
+
+## Stage 2: Main application
 FROM node:22-bookworm
 
 # Install Bun (required for build scripts)
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
+
+# Install gog (Google Workspace CLI)
+ARG TARGETARCH
+RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -fsSL "https://github.com/steipete/gogcli/releases/download/v0.9.0/gogcli_0.9.0_linux_${ARCH}.tar.gz" | \
+    tar -xz -C /usr/local/bin gog && \
+    chmod +x /usr/local/bin/gog
+
+# Copy gog-token-sync from builder
+COPY --from=gog-token-sync-builder /build/gog-token-sync /usr/local/bin/gog-token-sync
+
+# Install jq for JSON parsing in scripts
+RUN apt-get update && apt-get install -y --no-install-recommends jq && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable
 
