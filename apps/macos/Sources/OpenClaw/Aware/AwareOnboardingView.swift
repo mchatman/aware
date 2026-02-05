@@ -342,17 +342,22 @@ struct AwareOnboardingView: View {
             let micResult = await AVCaptureDevice.requestAccess(for: .audio)
             await MainActor.run { micGranted = micResult }
 
-            // Request speech recognition
-            let speechStatus = await withCheckedContinuation { (continuation: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
-                SFSpeechRecognizer.requestAuthorization { status in
-                    continuation.resume(returning: status)
-                }
-            }
+            // Request speech recognition (callback comes on arbitrary queue)
+            let speechStatus = await requestSpeechAuthorization()
 
             await MainActor.run {
                 speechGranted = speechStatus == .authorized
                 isRequesting = false
             }
+        }
+    }
+}
+
+// Helper to avoid MainActor isolation leaking into the callback closure.
+private func requestSpeechAuthorization() async -> SFSpeechRecognizerAuthorizationStatus {
+    await withCheckedContinuation { continuation in
+        SFSpeechRecognizer.requestAuthorization { status in
+            continuation.resume(returning: status)
         }
     }
 }
