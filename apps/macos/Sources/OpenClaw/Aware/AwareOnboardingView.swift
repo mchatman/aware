@@ -194,12 +194,23 @@ struct AwareOnboardingView: View {
 
             Spacer()
 
-            Button(action: { withAnimation { step = .done } }) {
-                Text(googleConnected ? "Continue" : "Skip for now")
-                    .frame(maxWidth: .infinity)
+            Group {
+                if googleConnected {
+                    Button(action: { withAnimation { step = .done } }) {
+                        Text("Continue")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+                } else {
+                    Button(action: { withAnimation { step = .done } }) {
+                        Text("Skip for now")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.secondary)
+                }
             }
-            .buttonStyle(googleConnected ? .borderedProminent : .bordered)
-            .tint(googleConnected ? .blue : .secondary)
             .controlSize(.large)
             .keyboardShortcut(.defaultAction)
         }
