@@ -191,6 +191,7 @@
     "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",
     "file-type": "^21.3.0",
+    "googleapis": "^171.3.0",
     "grammy": "^1.39.3",
     "hono": "4.11.4",
     "jiti": "^2.6.1",

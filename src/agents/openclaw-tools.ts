@@ -2,6 +2,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import { resolvePluginTools } from "../plugins/tools.js";
 import type { GatewayMessageChannel } from "../utils/message-channel.js";
 import { resolveSessionAgentId } from "./agent-scope.js";
+import { createGoogleTools } from "../google/plugin.js";
 import { createAgentsListTool } from "./tools/agents-list-tool.js";
 import { createBrowserTool } from "./tools/browser-tool.js";
 import { createCanvasTool } from "./tools/canvas-tool.js";
@@ -139,6 +140,17 @@ export function createOpenClawTools(options?: {
     ...(imageTool ? [imageTool] : []),
   ];
 
+  // Add Google tools (Gmail, Calendar)
+  const googleTools = createGoogleTools({
+    config: options?.config,
+    workspaceDir: options?.workspaceDir,
+    agentDir: options?.agentDir,
+    sessionKey: options?.agentSessionKey,
+    messageChannel: options?.agentChannel,
+    agentAccountId: options?.agentAccountId,
+    sandboxed: options?.sandboxed,
+  });
+
   const pluginTools = resolvePluginTools({
     context: {
       config: options?.config,
@@ -153,9 +165,9 @@ export function createOpenClawTools(options?: {
       agentAccountId: options?.agentAccountId,
       sandboxed: options?.sandboxed,
     },
-    existingToolNames: new Set(tools.map((tool) => tool.name)),
+    existingToolNames: new Set([...tools, ...googleTools].map((tool) => tool.name)),
     toolAllowlist: options?.pluginToolAllowlist,
   });
 
-  return [...tools, ...pluginTools];
+  return [...tools, ...googleTools, ...pluginTools];
 }
