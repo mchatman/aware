@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import authRoutes from './routes/auth.js';
 import gatewayRoutes from './routes/gateway.js';
+import googleRoutes from './routes/google.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
@@ -15,6 +16,7 @@ app.get('/health', (_req, res) => {
 
 // Routes
 app.use('/auth', authRoutes);
+app.use('/auth/google', googleRoutes);
 app.use('/gateway', gatewayRoutes);
 
 app.listen(PORT, () => {

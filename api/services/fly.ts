@@ -82,8 +82,44 @@ interface CreateMachineOptions {
   region: string;
 }
 
+async function resolveGatewayImage(): Promise<string> {
+  const envImage = process.env.GATEWAY_IMAGE;
+  if (envImage) return envImage;
+
+  // Fetch the current image from the reference gateway app's running machine
+  const refApp = process.env.GATEWAY_REF_APP ?? 'aware-gateway';
+  try {
+    const machines = await flyFetch(`/apps/${refApp}/machines`);
+    if (Array.isArray(machines) && machines.length > 0 && machines[0].config?.image) {
+      console.log(`[fly] Resolved gateway image from ${refApp}: ${machines[0].config.image}`);
+      return machines[0].config.image;
+    }
+  } catch (err) {
+    console.warn(`[fly] Failed to resolve image from ${refApp}, falling back to :latest`, err);
+  }
+  return 'registry.fly.io/aware-gateway:latest';
+}
+
 export async function createMachine(appName: string, options: CreateMachineOptions): Promise<any> {
-  const image = process.env.GATEWAY_IMAGE ?? 'registry.fly.io/aware-gateway:latest';
+  const image = await resolveGatewayImage();
+
+  // Build the gateway config that gets written to /data/openclaw.json on first boot.
+  // autoApproveDevices lets the Mac app connect without manual pairing approval.
+  const gatewayConfig = JSON.stringify({
+    gateway: {
+      mode: 'local',
+      port: 3000,
+      bind: 'lan',
+      autoApproveDevices: true,
+      auth: {
+        mode: 'token',
+        token: options.gatewayToken,
+      },
+    },
+  });
+
+  // Escape single quotes for shell safety
+  const escapedConfig = gatewayConfig.replace(/'/g, "'\\''");
 
   return flyFetch(`/apps/${appName}/machines`, {
     method: 'POST',
@@ -100,6 +136,7 @@ export async function createMachine(appName: string, options: CreateMachineOptio
           OPENCLAW_GATEWAY_TOKEN: options.gatewayToken,
           OPENCLAW_STATE_DIR: '/data',
           NODE_ENV: 'production',
+          ...(process.env.ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY } : {}),
         },
         mounts: [
           {
@@ -126,14 +163,9 @@ export async function createMachine(appName: string, options: CreateMachineOptio
         ],
         init: {
           cmd: [
-            'node',
-            'dist/index.js',
-            'gateway',
-            '--allow-unconfigured',
-            '--port',
-            '3000',
-            '--bind',
-            'lan',
+            'bash',
+            '-c',
+            `[ -f /data/openclaw.json ] || echo '${escapedConfig}' > /data/openclaw.json; exec node dist/index.js gateway --port 3000 --bind lan`,
           ],
         },
       },

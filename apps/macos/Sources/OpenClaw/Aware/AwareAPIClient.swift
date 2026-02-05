@@ -92,6 +92,18 @@ actor AwareAPIClient {
         try await get("/gateway/status")
     }
 
+    // MARK: Google
+
+    /// Returns the URL the user should open in their browser to start Google OAuth.
+    func googleAuthURL() async -> String? {
+        guard let token = accessToken else { return nil }
+        return "\(baseURL)/auth/google?token=\(token)"
+    }
+
+    func getGoogleStatus() async throws -> Aware.GoogleStatus {
+        try await get("/auth/google/status")
+    }
+
     // MARK: - Private Helpers
 
     /// Placeholder type for endpoints that return no meaningful data.
