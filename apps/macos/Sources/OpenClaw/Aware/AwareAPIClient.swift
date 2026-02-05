@@ -109,12 +109,16 @@ actor AwareAPIClient {
     /// Placeholder type for endpoints that return no meaningful data.
     private struct EmptyData: Codable, Sendable {}
 
-    private func get<T: Codable & Sendable>(_ path: String) async throws -> T {
+    func get<T: Codable & Sendable>(_ path: String) async throws -> T {
         try await request("GET", path: path, body: nil, authenticated: true)
     }
 
-    private func post<T: Codable & Sendable>(_ path: String, body: [String: String]?) async throws -> T {
+    func post<T: Codable & Sendable>(_ path: String, body: [String: String]?) async throws -> T {
         try await request("POST", path: path, body: body, authenticated: true)
+    }
+
+    func delete<T: Codable & Sendable>(_ path: String) async throws -> T {
+        try await request("DELETE", path: path, body: nil, authenticated: true)
     }
 
     private func request<T: Codable & Sendable>(
