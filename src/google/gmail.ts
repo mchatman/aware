@@ -3,7 +3,7 @@
  */
 
 import { google, gmail_v1 } from "googleapis";
-import { getOAuthClient, hasValidTokens } from "./oauth.js";
+import { getOAuth2Client, hasValidTokens } from "./oauth.js";
 
 let gmailClient: gmail_v1.Gmail | null = null;
 
@@ -13,7 +13,7 @@ function getGmailClient(): gmail_v1.Gmail {
   }
 
   if (!gmailClient) {
-    gmailClient = google.gmail({ version: "v1", auth: getOAuthClient() });
+    gmailClient = google.gmail({ version: "v1", auth: getOAuth2Client() });
   }
   return gmailClient;
 }

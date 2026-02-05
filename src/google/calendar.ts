@@ -3,7 +3,7 @@
  */
 
 import { google, calendar_v3 } from "googleapis";
-import { getOAuthClient, hasValidTokens } from "./oauth.js";
+import { getOAuth2Client, hasValidTokens } from "./oauth.js";
 
 let calendarClient: calendar_v3.Calendar | null = null;
 
@@ -13,7 +13,7 @@ function getCalendarClient(): calendar_v3.Calendar {
   }
 
   if (!calendarClient) {
-    calendarClient = google.calendar({ version: "v3", auth: getOAuthClient() });
+    calendarClient = google.calendar({ version: "v3", auth: getOAuth2Client() });
   }
   return calendarClient;
 }
