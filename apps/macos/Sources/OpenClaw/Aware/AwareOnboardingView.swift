@@ -343,16 +343,16 @@ struct AwareOnboardingView: View {
             await MainActor.run { micGranted = micResult }
 
             // Request speech recognition
-            await withCheckedContinuation { continuation in
+            let speechStatus = await withCheckedContinuation { (continuation: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
                 SFSpeechRecognizer.requestAuthorization { status in
-                    Task { @MainActor in
-                        speechGranted = status == .authorized
-                        continuation.resume()
-                    }
+                    continuation.resume(returning: status)
                 }
             }
 
-            await MainActor.run { isRequesting = false }
+            await MainActor.run {
+                speechGranted = speechStatus == .authorized
+                isRequesting = false
+            }
         }
     }
 }
