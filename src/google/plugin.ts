@@ -96,7 +96,8 @@ export function createGoogleTools(ctx: OpenClawPluginToolContext): AnyAgentTool[
   }
 
   // Initialize on first tool creation
-  const dataDir = ctx.workspaceDir || process.env.OPENCLAW_STATE_DIR || "/data";
+  // Use OPENCLAW_STATE_DIR or /data for tokens (not workspaceDir, which is for agent files)
+  const dataDir = process.env.OPENCLAW_STATE_DIR || "/data";
   initGooglePlugin({ clientId, clientSecret, dataDir });
 
   const tools: AnyAgentTool[] = [];
