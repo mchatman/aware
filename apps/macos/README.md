@@ -1,5 +1,24 @@
 # OpenClaw macOS app (dev + signing)
 
+## Prerequisites
+
+- **Bun** — for bundling the node-host binary (`curl -fsSL https://bun.sh/install | bash`)
+- **Xcode** — Swift 6.2+
+
+## Building
+
+```bash
+# Build everything (node-host + app)
+make
+
+# Or step by step:
+make node-host  # Build the browser node-host binary
+make app        # Build the Swift app
+
+# Release build
+make release
+```
+
 ## Quick dev run
 
 ```bash
