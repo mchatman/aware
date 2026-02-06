@@ -10,13 +10,13 @@
 ### 1. Create the app (first time only)
 
 ```bash
-fly apps create aware-gateway
+fly apps create aware-gateway --org <your-org>
 ```
 
 ### 2. Create persistent volume
 
 ```bash
-fly volumes create openclaw_data --region sjc --size 1
+fly volumes create aware_data --region sjc --size 1 --app aware-gateway
 ```
 
 ### 3. Set secrets
@@ -27,7 +27,7 @@ fly volumes create openclaw_data --region sjc --size 1
 TOKEN=$(openssl rand -hex 32)
 echo "Save this token: $TOKEN"
 
-fly secrets set OPENCLAW_GATEWAY_TOKEN=$TOKEN
+fly secrets set AWARE_GATEWAY_TOKEN=$TOKEN --app aware-gateway
 ```
 
 **Optional (for AI providers):**
@@ -39,7 +39,7 @@ fly secrets set OPENAI_API_KEY=sk-...
 **For development/testing only:**
 ```bash
 # Auto-approve device pairing (NOT for production!)
-fly secrets set OPENCLAW_AUTO_APPROVE_DEVICES=true
+fly secrets set AWARE_AUTO_APPROVE_DEVICES=true --app aware-gateway
 ```
 
 ### 4. Deploy
@@ -50,7 +50,7 @@ fly deploy
 
 ## Device Pairing
 
-With `OPENCLAW_AUTO_APPROVE_DEVICES=false` (production default), you need to manually approve devices:
+With `AWARE_AUTO_APPROVE_DEVICES=false` (production default), you need to manually approve devices:
 
 ```bash
 # SSH into the machine
@@ -64,9 +64,9 @@ node dist/index.js devices approve <device-id>
 Or temporarily enable auto-approve, connect your device, then disable:
 
 ```bash
-fly secrets set OPENCLAW_AUTO_APPROVE_DEVICES=true
+fly secrets set AWARE_AUTO_APPROVE_DEVICES=true
 # ... connect device ...
-fly secrets set OPENCLAW_AUTO_APPROVE_DEVICES=false
+fly secrets set AWARE_AUTO_APPROVE_DEVICES=false
 ```
 
 ## Monitoring
@@ -96,15 +96,15 @@ fly machines restart
 
 Use the gateway URL and token:
 
-- **URL:** `https://aware-gateway.fly.dev`
-- **Token:** The value you set in `OPENCLAW_GATEWAY_TOKEN`
+- **URL:** `https://<app-name>.fly.dev`
+- **Token:** The value you set in `AWARE_GATEWAY_TOKEN`
 
-Example client config (`~/.openclaw/openclaw.json`):
+Example client config:
 ```json
 {
   "gateway": {
     "mode": "remote-direct",
-    "url": "https://aware-gateway.fly.dev",
+    "url": "https://<app-name>.fly.dev",
     "token": "<your-token>"
   }
 }
@@ -113,7 +113,7 @@ Example client config (`~/.openclaw/openclaw.json`):
 ## Troubleshooting
 
 ### Config not updating
-The config is only generated if `/data/openclaw.json` doesn't exist. To regenerate:
+The config is only generated if it doesn't exist. To regenerate:
 
 ```bash
 fly ssh console
@@ -125,7 +125,7 @@ fly machines restart
 ### Health check failing
 Check logs for startup errors:
 ```bash
-fly logs --app aware-gateway
+fly logs
 ```
 
 ### Volume not mounting

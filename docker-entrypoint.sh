@@ -2,22 +2,29 @@
 set -e
 
 # === Config Generation ===
-# Generate openclaw.json from environment variables if it doesn't exist
+# Generate config from environment variables if it doesn't exist
 # This allows secrets to be passed via `fly secrets set` instead of baked into the image
 
-CONFIG_FILE="${OPENCLAW_STATE_DIR:-/data}/openclaw.json"
+# Use OPENCLAW_STATE_DIR (the env var the gateway reads) with AWARE_ fallback
+STATE_DIR="${OPENCLAW_STATE_DIR:-${AWARE_STATE_DIR:-/data}}"
+CONFIG_FILE="${STATE_DIR}/openclaw.json"
 
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Generating OpenClaw config at $CONFIG_FILE..."
+    echo "Generating gateway config at $CONFIG_FILE..."
     
-    # Require gateway token in production
-    if [ -z "$OPENCLAW_GATEWAY_TOKEN" ]; then
-        echo "ERROR: OPENCLAW_GATEWAY_TOKEN is required. Set it with: fly secrets set OPENCLAW_GATEWAY_TOKEN=<token>"
+    # Check for token (support both prefixes)
+    GATEWAY_TOKEN="${AWARE_GATEWAY_TOKEN:-${OPENCLAW_GATEWAY_TOKEN:-}}"
+    
+    if [ -z "$GATEWAY_TOKEN" ]; then
+        echo "ERROR: AWARE_GATEWAY_TOKEN is required. Set it with: fly secrets set AWARE_GATEWAY_TOKEN=<token>"
         exit 1
     fi
     
     # Auto-approve devices (default: false for production safety)
-    AUTO_APPROVE="${OPENCLAW_AUTO_APPROVE_DEVICES:-false}"
+    AUTO_APPROVE="${AWARE_AUTO_APPROVE_DEVICES:-${OPENCLAW_AUTO_APPROVE_DEVICES:-false}}"
+    
+    # Trusted proxies for Fly.io (private network ranges)
+    TRUSTED_PROXIES="${AWARE_TRUSTED_PROXIES:-\"172.16.0.0/12\", \"10.0.0.0/8\"}"
     
     # Generate config
     cat > "$CONFIG_FILE" << EOF
@@ -27,9 +34,10 @@ if [ ! -f "$CONFIG_FILE" ]; then
     "port": 3000,
     "bind": "lan",
     "autoApproveDevices": ${AUTO_APPROVE},
+    "trustedProxies": [${TRUSTED_PROXIES}],
     "auth": {
       "mode": "token",
-      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+      "token": "${GATEWAY_TOKEN}"
     }
   }
 }

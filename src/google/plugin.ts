@@ -7,7 +7,7 @@ import { Type } from "@sinclair/typebox";
 import type { AnyAgentTool } from "../agents/tools/common.js";
 import { jsonResult, readStringParam, readNumberParam } from "../agents/tools/common.js";
 import type { OpenClawPluginToolContext } from "../plugins/types.js";
-import { initGoogleAuth, hasValidTokens, getAuthUrl } from "./oauth.js";
+import { initGoogleAuth, ensureValidTokens, getAuthUrl } from "./oauth.js";
 import * as gmail from "./gmail.js";
 import * as calendar from "./calendar.js";
 
@@ -109,7 +109,7 @@ export function createGoogleTools(ctx: OpenClawPluginToolContext): AnyAgentTool[
     description: "List recent emails from Gmail inbox. Returns subject, from, date, and snippet.",
     parameters: GmailListSchema,
     execute: async (_toolCallId, args) => {
-      if (!hasValidTokens()) {
+      if (!(await ensureValidTokens())) {
         return jsonResult({ error: "Google not authenticated", authUrl: getAuthUrl() });
       }
       const params = args as Record<string, unknown>;
@@ -127,7 +127,7 @@ export function createGoogleTools(ctx: OpenClawPluginToolContext): AnyAgentTool[
     description: "Read the full content of a specific email by its ID.",
     parameters: GmailReadSchema,
     execute: async (_toolCallId, args) => {
-      if (!hasValidTokens()) {
+      if (!(await ensureValidTokens())) {
         return jsonResult({ error: "Google not authenticated", authUrl: getAuthUrl() });
       }
       const params = args as Record<string, unknown>;
@@ -144,7 +144,7 @@ export function createGoogleTools(ctx: OpenClawPluginToolContext): AnyAgentTool[
     description: "Send an email via Gmail.",
     parameters: GmailSendSchema,
     execute: async (_toolCallId, args) => {
-      if (!hasValidTokens()) {
+      if (!(await ensureValidTokens())) {
         return jsonResult({ error: "Google not authenticated", authUrl: getAuthUrl() });
       }
       const params = args as Record<string, unknown>;
@@ -164,7 +164,7 @@ export function createGoogleTools(ctx: OpenClawPluginToolContext): AnyAgentTool[
     description: "Search emails using Gmail query syntax.",
     parameters: GmailSearchSchema,
     execute: async (_toolCallId, args) => {
-      if (!hasValidTokens()) {
+      if (!(await ensureValidTokens())) {
         return jsonResult({ error: "Google not authenticated", authUrl: getAuthUrl() });
       }
       const params = args as Record<string, unknown>;
@@ -182,7 +182,7 @@ export function createGoogleTools(ctx: OpenClawPluginToolContext): AnyAgentTool[
     description: "Get count of unread emails in inbox.",
     parameters: Type.Object({}),
     execute: async () => {
-      if (!hasValidTokens()) {
+      if (!(await ensureValidTokens())) {
         return jsonResult({ error: "Google not authenticated", authUrl: getAuthUrl() });
       }
       const count = await gmail.getUnreadCount();
@@ -197,7 +197,7 @@ export function createGoogleTools(ctx: OpenClawPluginToolContext): AnyAgentTool[
     description: "Get today's calendar events.",
     parameters: Type.Object({}),
     execute: async () => {
-      if (!hasValidTokens()) {
+      if (!(await ensureValidTokens())) {
         return jsonResult({ error: "Google not authenticated", authUrl: getAuthUrl() });
       }
       const events = await calendar.getTodayEvents();
@@ -212,7 +212,7 @@ export function createGoogleTools(ctx: OpenClawPluginToolContext): AnyAgentTool[
     description: "List upcoming calendar events.",
     parameters: CalendarListSchema,
     execute: async (_toolCallId, args) => {
-      if (!hasValidTokens()) {
+      if (!(await ensureValidTokens())) {
         return jsonResult({ error: "Google not authenticated", authUrl: getAuthUrl() });
       }
       const params = args as Record<string, unknown>;
@@ -229,7 +229,7 @@ export function createGoogleTools(ctx: OpenClawPluginToolContext): AnyAgentTool[
     description: "Create a calendar event.",
     parameters: CalendarCreateSchema,
     execute: async (_toolCallId, args) => {
-      if (!hasValidTokens()) {
+      if (!(await ensureValidTokens())) {
         return jsonResult({ error: "Google not authenticated", authUrl: getAuthUrl() });
       }
       const params = args as Record<string, unknown>;
@@ -250,7 +250,7 @@ export function createGoogleTools(ctx: OpenClawPluginToolContext): AnyAgentTool[
     description: "Delete a calendar event by ID.",
     parameters: CalendarDeleteSchema,
     execute: async (_toolCallId, args) => {
-      if (!hasValidTokens()) {
+      if (!(await ensureValidTokens())) {
         return jsonResult({ error: "Google not authenticated", authUrl: getAuthUrl() });
       }
       const params = args as Record<string, unknown>;

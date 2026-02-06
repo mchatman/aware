@@ -1,7 +1,9 @@
 /**
  * Google OAuth 2.0 authentication
  *
- * Uses googleapis directly for OAuth (no separate google-auth-library needed)
+ * Supports two modes:
+ * 1. Local tokens (from CLI auth or file)
+ * 2. Remote tokens (fetched from control plane for multi-tenant)
  */
 
 import fs from "node:fs";
@@ -28,6 +30,9 @@ const SCOPES = [
 let oauth2Client: Auth.OAuth2Client | null = null;
 let tokenPath: string = "";
 let authConfig: GoogleAuthConfig | null = null;
+let controlPlaneUrl: string | null = null;
+let gatewayToken: string | null = null;
+let remoteFetchAttempted = false;
 
 /**
  * Initialize the OAuth client
@@ -35,6 +40,10 @@ let authConfig: GoogleAuthConfig | null = null;
 export function initGoogleAuth(config: GoogleAuthConfig, dataDir: string): void {
   authConfig = config;
   tokenPath = path.join(dataDir, "google-tokens.json");
+
+  // Get control plane config for remote token fetching
+  controlPlaneUrl = process.env.CONTROL_PLANE_URL || null;
+  gatewayToken = process.env.AWARE_GATEWAY_TOKEN || null;
 
   oauth2Client = new google.auth.OAuth2(
     config.clientId,
@@ -103,6 +112,75 @@ function saveTokens(tokens: TokenData): void {
 }
 
 /**
+ * Fetch tokens from control plane (for multi-tenant)
+ */
+async function fetchRemoteTokens(): Promise<TokenData | null> {
+  if (!controlPlaneUrl || !gatewayToken) {
+    console.log("[google] Control plane not configured, skipping remote fetch");
+    return null;
+  }
+
+  try {
+    console.log(`[google] Fetching tokens from control plane: ${controlPlaneUrl}`);
+    const response = await fetch(`${controlPlaneUrl}/internal/google/tokens`, {
+      headers: { Authorization: `Bearer ${gatewayToken}` },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.log(`[google] Control plane returned ${response.status}: ${text}`);
+      return null;
+    }
+
+    const data = await response.json();
+    if (!data.accessToken) {
+      console.log("[google] No tokens returned from control plane");
+      return null;
+    }
+
+    console.log(`[google] Got tokens from control plane for ${data.googleEmail}`);
+
+    // Convert to TokenData format
+    const tokens: TokenData = {
+      access_token: data.accessToken,
+      refresh_token: data.refreshToken,
+      expiry_date: new Date(data.expiresAt).getTime(),
+    };
+
+    return tokens;
+  } catch (err) {
+    console.error("[google] Failed to fetch from control plane:", err);
+    return null;
+  }
+}
+
+/**
+ * Ensure we have valid tokens, fetching from control plane if needed
+ */
+async function ensureTokens(): Promise<boolean> {
+  if (!oauth2Client) return false;
+
+  // Check if we have local tokens
+  const creds = oauth2Client.credentials;
+  if (creds.access_token || creds.refresh_token) {
+    return true;
+  }
+
+  // Try to fetch from control plane (only once per session to avoid spam)
+  if (!remoteFetchAttempted) {
+    remoteFetchAttempted = true;
+    const remoteTokens = await fetchRemoteTokens();
+    if (remoteTokens) {
+      oauth2Client.setCredentials(remoteTokens);
+      saveTokens(remoteTokens);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Get the authorization URL for initial auth
  */
 export function getAuthUrl(): string {
@@ -131,7 +209,14 @@ export async function exchangeCode(code: string): Promise<TokenData> {
 }
 
 /**
- * Check if we have valid tokens
+ * Check if we have valid tokens (async version that may fetch remote)
+ */
+export async function ensureValidTokens(): Promise<boolean> {
+  return ensureTokens();
+}
+
+/**
+ * Check if we have valid tokens (sync check only, no remote fetch)
  */
 export function hasValidTokens(): boolean {
   if (!oauth2Client) return false;
@@ -167,6 +252,7 @@ export function clearTokens(): void {
   if (oauth2Client) {
     oauth2Client.setCredentials({});
   }
+  remoteFetchAttempted = false; // Allow re-fetching
   try {
     if (fs.existsSync(tokenPath)) {
       fs.unlinkSync(tokenPath);
@@ -174,4 +260,11 @@ export function clearTokens(): void {
   } catch {
     // ignore
   }
+}
+
+/**
+ * Force re-fetch from control plane on next check
+ */
+export function invalidateTokenCache(): void {
+  remoteFetchAttempted = false;
 }
