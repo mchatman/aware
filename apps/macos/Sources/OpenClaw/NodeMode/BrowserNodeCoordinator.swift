@@ -48,9 +48,9 @@ final class BrowserNodeCoordinator {
             return
         }
         
-        // Get gateway token from environment or keychain
+        // Get gateway token from environment or config
         let token = ProcessInfo.processInfo.environment["OPENCLAW_GATEWAY_TOKEN"]
-            ?? (try? await GatewayEndpointStore.shared.requireConfig().token)
+            ?? config.token
         
         let process = Process()
         process.executableURL = binaryURL
@@ -131,7 +131,7 @@ final class BrowserNodeCoordinator {
         return url.lastPathComponent == "openclaw"
     }
     
-    private func buildArguments(for binaryURL: URL, config: GatewayEndpointStore.Config) -> [String] {
+    private func buildArguments(for binaryURL: URL, config: GatewayConnection.Config) -> [String] {
         var arguments: [String] = []
         
         // If using openclaw CLI, prepend "node run" subcommand
