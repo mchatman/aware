@@ -48,6 +48,9 @@ final class BrowserNodeCoordinator {
             return
         }
         
+        // Ensure browser config exists with openclaw profile as default
+        ensureBrowserConfig()
+        
         // Get gateway token from environment or config
         let token = ProcessInfo.processInfo.environment["OPENCLAW_GATEWAY_TOKEN"]
             ?? config.token
@@ -99,6 +102,37 @@ final class BrowserNodeCoordinator {
             logger.info("Browser node-host started (PID: \(process.processIdentifier))")
         } catch {
             logger.error("Failed to start browser node-host: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Ensure the OpenClaw config has browser.defaultProfile set to "openclaw"
+    /// so the managed browser is used instead of the Chrome extension relay.
+    private func ensureBrowserConfig() {
+        let configDir = NSHomeDirectory() + "/.openclaw"
+        let configPath = configDir + "/openclaw.json"
+        
+        // Create config directory if needed
+        try? FileManager.default.createDirectory(atPath: configDir, withIntermediateDirectories: true)
+        
+        // Read existing config or start fresh
+        var config: [String: Any] = [:]
+        if let data = FileManager.default.contents(atPath: configPath),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            config = existing
+        }
+        
+        // Ensure browser config with openclaw as default profile
+        var browserConfig = config["browser"] as? [String: Any] ?? [:]
+        if browserConfig["defaultProfile"] == nil {
+            browserConfig["defaultProfile"] = "openclaw"
+            browserConfig["enabled"] = true
+            config["browser"] = browserConfig
+            
+            // Write updated config
+            if let data = try? JSONSerialization.data(withJSONObject: config, options: .prettyPrinted) {
+                try? data.write(to: URL(fileURLWithPath: configPath))
+                logger.info("Created browser config with openclaw profile as default")
+            }
         }
     }
     
