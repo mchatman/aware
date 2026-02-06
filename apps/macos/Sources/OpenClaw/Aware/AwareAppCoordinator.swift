@@ -127,6 +127,13 @@ final class AwareAppCoordinator {
         UserDefaults.standard.set(true, forKey: onboardingSeenKey)
         UserDefaults.standard.set(currentOnboardingVersion, forKey: onboardingVersionKey)
         AppStateStore.shared.onboardingSeen = true
+        
+        // Enable talk mode by default for Aware (voice-first experience).
+        if !UserDefaults.standard.bool(forKey: "aware.talkModeInitialized") {
+            UserDefaults.standard.set(true, forKey: "aware.talkModeInitialized")
+            AppStateStore.shared.talkEnabled = true
+            log.info("Enabled talk mode for voice-first experience")
+        }
 
         // Close any lingering auth windows.
         AwareAuthWindowController.shared.close()
