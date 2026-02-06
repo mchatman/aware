@@ -105,12 +105,17 @@ final class BrowserNodeCoordinator {
         
         logger.info("Launching Chrome with CDP on port \(self.cdpPort)")
         
+        // Use a dedicated user data directory to avoid profile picker
+        let userDataDir = NSHomeDirectory() + "/.openclaw/chrome-cdp"
+        try? FileManager.default.createDirectory(atPath: userDataDir, withIntermediateDirectories: true)
+        
         let process = Process()
         process.executableURL = URL(fileURLWithPath: chromePath)
         process.arguments = [
             "--remote-debugging-port=\(cdpPort)",
             "--no-first-run",
-            "--no-default-browser-check"
+            "--no-default-browser-check",
+            "--user-data-dir=\(userDataDir)"
         ]
         
         // Detach Chrome so it persists after we exit
@@ -165,6 +170,7 @@ final class BrowserNodeCoordinator {
         if browserConfig["cdpUrl"] as? String != expectedCdpUrl {
             browserConfig["enabled"] = true
             browserConfig["cdpUrl"] = expectedCdpUrl
+            browserConfig["attachOnly"] = true  // Don't try to launch, just attach
             // Remove managed browser settings
             browserConfig.removeValue(forKey: "defaultProfile")
             config["browser"] = browserConfig
