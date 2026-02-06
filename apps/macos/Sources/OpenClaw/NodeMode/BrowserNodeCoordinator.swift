@@ -1,19 +1,23 @@
 import Foundation
 import OSLog
 
-/// Manages the OpenClaw node-host subprocess for browser proxy support.
-/// This runs alongside MacNodeModeCoordinator to provide browser automation capabilities.
+/// Manages Chrome with CDP and the OpenClaw node-host subprocess for browser proxy support.
+/// Uses CDP attach mode to control the user's Chrome browser.
 @MainActor
 final class BrowserNodeCoordinator {
     static let shared = BrowserNodeCoordinator()
     
     private let logger = Logger(subsystem: "ai.openclaw", category: "browser-node")
-    private var process: Process?
+    private var nodeProcess: Process?
+    private var chromeProcess: Process?
     private var isRunning = false
+    
+    /// CDP port for Chrome remote debugging
+    private let cdpPort = 9222
     
     private init() {}
     
-    /// Start the browser node-host subprocess.
+    /// Start Chrome with CDP and the browser node-host subprocess.
     func start() {
         guard !isRunning else {
             logger.debug("Browser node already running")
@@ -21,36 +25,159 @@ final class BrowserNodeCoordinator {
         }
         
         Task {
-            await startProcess()
+            await startBrowserStack()
         }
     }
     
-    /// Stop the browser node-host subprocess.
+    /// Stop Chrome and the browser node-host subprocess.
     func stop() {
-        guard isRunning, let process = process else { return }
+        logger.info("Stopping browser stack")
         
-        logger.info("Stopping browser node-host")
-        process.terminate()
-        self.process = nil
-        self.isRunning = false
+        if let nodeProcess = nodeProcess {
+            nodeProcess.terminate()
+            self.nodeProcess = nil
+        }
+        
+        // Don't kill Chrome - user might have other tabs open
+        // Just disconnect gracefully
+        
+        isRunning = false
     }
     
-    private func startProcess() async {
+    private func startBrowserStack() async {
         // Get gateway config from the endpoint store
         guard let config = try? await GatewayEndpointStore.shared.requireConfig() else {
             logger.error("No gateway config available for browser node")
             return
         }
         
-        // Find the bundled node-host binary
+        // Ensure browser config points to CDP
+        ensureBrowserConfig()
+        
+        // Launch Chrome with remote debugging if not already running
+        await launchChromeWithCDP()
+        
+        // Wait a moment for Chrome to start
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        
+        // Verify Chrome CDP is available
+        guard await isCDPAvailable() else {
+            logger.error("Chrome CDP not available after launch")
+            return
+        }
+        
+        // Find and start the node-host
         guard let binaryURL = findNodeHostBinary() else {
             logger.error("Browser node-host binary not found in bundle")
             return
         }
         
-        // Ensure browser config exists with openclaw profile as default
-        ensureBrowserConfig()
+        await startNodeHost(binaryURL: binaryURL, config: config)
+    }
+    
+    /// Launch Chrome with remote debugging enabled
+    private func launchChromeWithCDP() async {
+        // Check if Chrome is already running with CDP
+        if await isCDPAvailable() {
+            logger.info("Chrome CDP already available on port \(self.cdpPort)")
+            return
+        }
         
+        // Find Chrome
+        let chromePaths = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "\(NSHomeDirectory())/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        ]
+        
+        var chromePath: String?
+        for path in chromePaths {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                chromePath = path
+                break
+            }
+        }
+        
+        guard let chromePath = chromePath else {
+            logger.error("Chrome not found. Please install Google Chrome.")
+            return
+        }
+        
+        logger.info("Launching Chrome with CDP on port \(self.cdpPort)")
+        
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: chromePath)
+        process.arguments = [
+            "--remote-debugging-port=\(cdpPort)",
+            "--no-first-run",
+            "--no-default-browser-check"
+        ]
+        
+        // Detach Chrome so it persists after we exit
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        
+        do {
+            try process.run()
+            chromeProcess = process
+            logger.info("Chrome launched with PID \(process.processIdentifier)")
+        } catch {
+            logger.error("Failed to launch Chrome: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Check if Chrome CDP is available
+    private func isCDPAvailable() async -> Bool {
+        let url = URL(string: "http://127.0.0.1:\(cdpPort)/json/version")!
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(from: url)
+            if let httpResponse = response as? HTTPURLResponse {
+                return httpResponse.statusCode == 200
+            }
+        } catch {
+            // CDP not available
+        }
+        
+        return false
+    }
+    
+    /// Configure OpenClaw to use CDP attach mode
+    private func ensureBrowserConfig() {
+        let configDir = NSHomeDirectory() + "/.openclaw"
+        let configPath = configDir + "/openclaw.json"
+        
+        // Create config directory if needed
+        try? FileManager.default.createDirectory(atPath: configDir, withIntermediateDirectories: true)
+        
+        // Read existing config or start fresh
+        var config: [String: Any] = [:]
+        if let data = FileManager.default.contents(atPath: configPath),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            config = existing
+        }
+        
+        // Configure browser for CDP attach
+        var browserConfig = config["browser"] as? [String: Any] ?? [:]
+        let expectedCdpUrl = "http://127.0.0.1:\(cdpPort)"
+        
+        // Update if not already configured for CDP
+        if browserConfig["cdpUrl"] as? String != expectedCdpUrl {
+            browserConfig["enabled"] = true
+            browserConfig["cdpUrl"] = expectedCdpUrl
+            // Remove managed browser settings
+            browserConfig.removeValue(forKey: "defaultProfile")
+            config["browser"] = browserConfig
+            
+            // Write updated config
+            if let data = try? JSONSerialization.data(withJSONObject: config, options: .prettyPrinted) {
+                try? data.write(to: URL(fileURLWithPath: configPath))
+                logger.info("Configured browser for CDP attach at \(expectedCdpUrl)")
+            }
+        }
+    }
+    
+    private func startNodeHost(binaryURL: URL, config: GatewayConnection.Config) async {
         // Get gateway token from environment or config
         let token = ProcessInfo.processInfo.environment["OPENCLAW_GATEWAY_TOKEN"]
             ?? config.token
@@ -85,7 +212,7 @@ final class BrowserNodeCoordinator {
             Task { @MainActor in
                 self?.logger.info("Browser node-host exited with code \(proc.terminationStatus)")
                 self?.isRunning = false
-                self?.process = nil
+                self?.nodeProcess = nil
                 
                 // Auto-restart after delay if not intentionally stopped
                 if proc.terminationStatus != 0 {
@@ -97,42 +224,11 @@ final class BrowserNodeCoordinator {
         
         do {
             try process.run()
-            self.process = process
+            self.nodeProcess = process
             self.isRunning = true
             logger.info("Browser node-host started (PID: \(process.processIdentifier))")
         } catch {
             logger.error("Failed to start browser node-host: \(error.localizedDescription)")
-        }
-    }
-    
-    /// Ensure the OpenClaw config has browser.defaultProfile set to "openclaw"
-    /// so the managed browser is used instead of the Chrome extension relay.
-    private func ensureBrowserConfig() {
-        let configDir = NSHomeDirectory() + "/.openclaw"
-        let configPath = configDir + "/openclaw.json"
-        
-        // Create config directory if needed
-        try? FileManager.default.createDirectory(atPath: configDir, withIntermediateDirectories: true)
-        
-        // Read existing config or start fresh
-        var config: [String: Any] = [:]
-        if let data = FileManager.default.contents(atPath: configPath),
-           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            config = existing
-        }
-        
-        // Ensure browser config with openclaw as default profile
-        var browserConfig = config["browser"] as? [String: Any] ?? [:]
-        if browserConfig["defaultProfile"] == nil {
-            browserConfig["defaultProfile"] = "openclaw"
-            browserConfig["enabled"] = true
-            config["browser"] = browserConfig
-            
-            // Write updated config
-            if let data = try? JSONSerialization.data(withJSONObject: config, options: .prettyPrinted) {
-                try? data.write(to: URL(fileURLWithPath: configPath))
-                logger.info("Created browser config with openclaw profile as default")
-            }
         }
     }
     
