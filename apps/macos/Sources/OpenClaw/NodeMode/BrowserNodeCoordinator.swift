@@ -239,9 +239,27 @@ final class BrowserNodeCoordinator {
     }
     
     private func findNodeHostBinary() -> URL? {
-        // First, check the app bundle for the standalone binary
+        // First, check the app bundle for the standalone binary (from Bundle.module resources)
         if let bundled = Bundle.main.url(forResource: "aware-node-host", withExtension: nil) {
+            logger.debug("Found bundled aware-node-host at \(bundled.path)")
             return bundled
+        }
+        
+        // Also check in the executable's directory (for dev builds)
+        if let executablePath = Bundle.main.executablePath {
+            let execDir = URL(fileURLWithPath: executablePath).deletingLastPathComponent()
+            let devPath = execDir.appendingPathComponent("aware-node-host")
+            if FileManager.default.isExecutableFile(atPath: devPath.path) {
+                logger.debug("Found aware-node-host in executable dir: \(devPath.path)")
+                return devPath
+            }
+            
+            // Check Resources subdirectory
+            let resourcePath = execDir.appendingPathComponent("OpenClaw_OpenClaw.bundle/Contents/Resources/aware-node-host")
+            if FileManager.default.isExecutableFile(atPath: resourcePath.path) {
+                logger.debug("Found aware-node-host in resources: \(resourcePath.path)")
+                return resourcePath
+            }
         }
         
         // Fallback: check for openclaw CLI in common locations
@@ -259,6 +277,7 @@ final class BrowserNodeCoordinator {
             }
         }
         
+        logger.error("No aware-node-host or openclaw CLI found")
         return nil
     }
     
