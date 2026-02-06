@@ -126,8 +126,28 @@ final class BrowserNodeCoordinator {
             try process.run()
             chromeProcess = process
             logger.info("Chrome launched with PID \(process.processIdentifier)")
+            
+            // Bring Chrome to the foreground
+            activateChrome()
         } catch {
             logger.error("Failed to launch Chrome: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Bring Chrome to the foreground using AppleScript
+    private func activateChrome() {
+        let script = """
+            tell application "Google Chrome"
+                activate
+            end tell
+            """
+        
+        var error: NSDictionary?
+        if let appleScript = NSAppleScript(source: script) {
+            appleScript.executeAndReturnError(&error)
+            if let error = error {
+                logger.warning("Failed to activate Chrome: \(error)")
+            }
         }
     }
     
