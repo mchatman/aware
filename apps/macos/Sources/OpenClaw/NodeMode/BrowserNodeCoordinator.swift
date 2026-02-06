@@ -273,12 +273,14 @@ final class BrowserNodeCoordinator {
         if let host = config.url.host {
             arguments.append(contentsOf: ["--host", host])
         }
-        if let port = config.url.port {
-            arguments.append(contentsOf: ["--port", String(port)])
-        }
+        
+        // Use explicit port if set, otherwise derive from scheme
+        let isTLS = config.url.scheme == "wss" || config.url.scheme == "https"
+        let port = config.url.port ?? (isTLS ? 443 : 80)
+        arguments.append(contentsOf: ["--port", String(port)])
         
         // Check if TLS
-        if config.url.scheme == "wss" {
+        if isTLS {
             arguments.append("--tls")
         }
         
