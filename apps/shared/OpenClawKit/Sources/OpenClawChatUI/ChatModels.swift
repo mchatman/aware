@@ -144,6 +144,8 @@ public struct OpenClawChatMessage: Codable, Identifiable, Sendable {
     public let toolName: String?
     public let usage: OpenClawChatUsage?
     public let stopReason: String?
+    public let mediaUrl: String?
+    public let mediaUrls: [String]?
 
     enum CodingKeys: String, CodingKey {
         case role
@@ -155,6 +157,8 @@ public struct OpenClawChatMessage: Codable, Identifiable, Sendable {
         case tool_name
         case usage
         case stopReason
+        case mediaUrl
+        case mediaUrls
     }
 
     public init(
@@ -165,7 +169,9 @@ public struct OpenClawChatMessage: Codable, Identifiable, Sendable {
         toolCallId: String? = nil,
         toolName: String? = nil,
         usage: OpenClawChatUsage? = nil,
-        stopReason: String? = nil)
+        stopReason: String? = nil,
+        mediaUrl: String? = nil,
+        mediaUrls: [String]? = nil)
     {
         self.id = id
         self.role = role
@@ -175,6 +181,8 @@ public struct OpenClawChatMessage: Codable, Identifiable, Sendable {
         self.toolName = toolName
         self.usage = usage
         self.stopReason = stopReason
+        self.mediaUrl = mediaUrl
+        self.mediaUrls = mediaUrls
     }
 
     public init(from decoder: Decoder) throws {
@@ -189,6 +197,8 @@ public struct OpenClawChatMessage: Codable, Identifiable, Sendable {
             container.decodeIfPresent(String.self, forKey: .tool_name)
         self.usage = try container.decodeIfPresent(OpenClawChatUsage.self, forKey: .usage)
         self.stopReason = try container.decodeIfPresent(String.self, forKey: .stopReason)
+        self.mediaUrl = try container.decodeIfPresent(String.self, forKey: .mediaUrl)
+        self.mediaUrls = try container.decodeIfPresent([String].self, forKey: .mediaUrls)
 
         if let decoded = try? container.decode([OpenClawChatMessageContent].self, forKey: .content) {
             self.content = decoded

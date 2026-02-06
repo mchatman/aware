@@ -38,7 +38,19 @@ final class AwareTTSAutoPlayer {
             processedMessageIds.removeFirst()
         }
         
-        // Find audio content
+        // Check for mediaUrl first (TTS audio from gateway)
+        if let mediaUrl = message.mediaUrl, !mediaUrl.isEmpty {
+            playMediaUrl(mediaUrl)
+            return
+        }
+        
+        // Check mediaUrls array
+        if let mediaUrls = message.mediaUrls, let firstUrl = mediaUrls.first {
+            playMediaUrl(firstUrl)
+            return
+        }
+        
+        // Find audio content in message parts
         for content in message.content {
             if let mimeType = content.mimeType,
                mimeType.hasPrefix("audio/"),
@@ -47,6 +59,37 @@ final class AwareTTSAutoPlayer {
                 return // Play first audio only
             }
         }
+    }
+    
+    private func playMediaUrl(_ path: String) {
+        // mediaUrl is typically a relative path like /media/abc123.mp3
+        // We need the gateway base URL to construct the full URL
+        guard let gatewayUrl = getGatewayBaseUrl() else {
+            log.warning("No gateway URL available for media playback")
+            return
+        }
+        
+        let fullUrl: String
+        if path.hasPrefix("http://") || path.hasPrefix("https://") {
+            fullUrl = path
+        } else {
+            // Construct full URL from gateway base + path
+            fullUrl = gatewayUrl + path
+        }
+        
+        log.info("Playing TTS from: \(fullUrl, privacy: .public)")
+        playURL(fullUrl)
+    }
+    
+    private func getGatewayBaseUrl() -> String? {
+        // Get gateway URL from auth manager
+        if let endpoint = AwareAuthManager.shared.gatewayEndpoint {
+            // Convert wss:// to https://
+            return endpoint
+                .replacingOccurrences(of: "wss://", with: "https://")
+                .replacingOccurrences(of: "ws://", with: "http://")
+        }
+        return nil
     }
     
     /// Stop current playback.
