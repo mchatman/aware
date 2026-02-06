@@ -163,6 +163,9 @@ final class WebChatSwiftUIWindowController {
             userAccent: accent))
         self.contentController = Self.makeContentController(for: presentation, hosting: self.hosting)
         self.window = Self.makeWindow(for: presentation, contentViewController: self.contentController)
+        
+        // Observe chat for TTS auto-playback (Aware feature)
+        AwareChatObserver.shared.observe(vm)
     }
 
     deinit {}
