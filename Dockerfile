@@ -27,8 +27,7 @@ COPY --from=gog-token-sync-builder /build/gog-token-sync /usr/local/bin/gog-toke
 RUN apt-get update && apt-get install -y --no-install-recommends jq && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Playwright with Chromium for browser automation
-RUN npx playwright install chromium --with-deps
+# Note: Server-side browser disabled - browser proxy runs on user's Mac via node-host
 
 RUN corepack enable
 
