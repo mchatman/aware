@@ -216,6 +216,22 @@ else
   echo "WARN: model catalog missing at $MODEL_CATALOG_SRC (continuing)" >&2
 fi
 
+echo "📦 Building browser node-host binary"
+NODE_HOST_BIN="$ROOT_DIR/dist/aware-node-host"
+if command -v bun &> /dev/null; then
+  (cd "$ROOT_DIR" && bun build aware-node-host.mjs --compile --outfile "$NODE_HOST_BIN")
+  if [ -f "$NODE_HOST_BIN" ]; then
+    cp "$NODE_HOST_BIN" "$APP_ROOT/Contents/Resources/aware-node-host"
+    chmod +x "$APP_ROOT/Contents/Resources/aware-node-host"
+    echo "✅ Browser node-host binary built and bundled"
+  else
+    echo "WARN: bun build succeeded but binary not found (browser proxy disabled)" >&2
+  fi
+else
+  echo "WARN: bun not found, skipping browser node-host build (browser proxy disabled)" >&2
+  echo "      Install bun: curl -fsSL https://bun.sh/install | bash" >&2
+fi
+
 echo "📦 Copying OpenClawKit resources"
 OPENCLAWKIT_BUNDLE="$(build_path_for_arch "$PRIMARY_ARCH")/$BUILD_CONFIG/OpenClawKit_OpenClawKit.bundle"
 if [ -d "$OPENCLAWKIT_BUNDLE" ]; then

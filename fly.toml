@@ -39,8 +39,8 @@ primary_region = "sjc"
   path = "/health"
 
 [[vm]]
-  size = "shared-cpu-2x"
-  memory = "2048mb"
+  size = "shared-cpu-4x"
+  memory = "4096mb"
 
 [mounts]
   source = "aware_data"

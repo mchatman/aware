@@ -280,6 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ExecApprovalsPromptServer.shared.start()
         ExecApprovalsGatewayPrompter.shared.start()
         MacNodeModeCoordinator.shared.start()
+        BrowserNodeCoordinator.shared.start()
         VoiceWakeGlobalSettingsSync.shared.start()
         NotchController.shared.setup()
         Task { PresenceReporter.shared.start() }
@@ -309,6 +310,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ExecApprovalsPromptServer.shared.stop()
         ExecApprovalsGatewayPrompter.shared.stop()
         MacNodeModeCoordinator.shared.stop()
+        BrowserNodeCoordinator.shared.stop()
         TerminationSignalWatcher.shared.stop()
         VoiceWakeGlobalSettingsSync.shared.stop()
         WebChatManager.shared.close()
