@@ -156,7 +156,14 @@ stop_launch_agent
 # Bundle Gateway-hosted Canvas A2UI assets.
 run_step "bundle canvas a2ui" bash -lc "cd '${ROOT_DIR}' && pnpm canvas:a2ui:bundle"
 
-# 2) Rebuild into the same path the packager consumes (.build).
+# 2) Build the node-host binary (if bun is available)
+if command -v bun &> /dev/null; then
+  run_step "build node-host" bash -lc "cd '${ROOT_DIR}/apps/macos' && make node-host"
+else
+  log "==> Skipping node-host build (bun not installed)"
+fi
+
+# 3) Rebuild into the same path the packager consumes (.build).
 run_step "clean build cache" bash -lc "cd '${ROOT_DIR}/apps/macos' && rm -rf .build .build-swift .swiftpm 2>/dev/null || true"
 run_step "swift build" bash -lc "cd '${ROOT_DIR}/apps/macos' && swift build -q --product OpenClaw"
 
