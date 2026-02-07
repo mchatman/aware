@@ -728,16 +728,12 @@ extension OnboardingView {
                 }
                 self.featureRow(
                     title: "Open the menu bar panel",
-                    subtitle: "Click the OpenClaw menu bar icon for quick chat and status.",
+                    subtitle: "Click the Aware menu bar icon for quick chat and status.",
                     systemImage: "bubble.left.and.bubble.right")
-                self.featureActionRow(
-                    title: "Connect WhatsApp or Telegram",
-                    subtitle: "Open Settings → Channels to link channels and monitor status.",
-                    systemImage: "link",
-                    buttonTitle: "Open Settings → Channels")
-                {
-                    self.openSettings(tab: .channels)
-                }
+                self.featureRow(
+                    title: "Voice-first assistant",
+                    subtitle: "Use Voice Wake and Talk Mode for hands-free interaction.",
+                    systemImage: "waveform.circle")
                 self.featureRow(
                     title: "Try Voice Wake",
                     subtitle: "Enable Voice Wake in Settings for hands-free commands with a live transcript overlay.",
@@ -747,14 +743,10 @@ extension OnboardingView {
                     subtitle: "Open the menu bar panel for quick chat; the agent can show previews " +
                         "and richer visuals in Canvas.",
                     systemImage: "rectangle.inset.filled.and.person.filled")
-                self.featureActionRow(
-                    title: "Give your agent more powers",
-                    subtitle: "Enable optional skills (Peekaboo, oracle, camsnap, …) from Settings → Skills.",
-                    systemImage: "sparkles",
-                    buttonTitle: "Open Settings → Skills")
-                {
-                    self.openSettings(tab: .skills)
-                }
+                self.featureRow(
+                    title: "Google integration",
+                    subtitle: "Connect your Google account for Gmail, Calendar, and Drive access.",
+                    systemImage: "sparkles")
                 self.skillsOverview
                 Toggle("Launch at login", isOn: self.$state.launchAtLogin)
                     .onChange(of: self.state.launchAtLogin) { _, newValue in
