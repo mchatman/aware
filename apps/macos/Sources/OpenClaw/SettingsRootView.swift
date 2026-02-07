@@ -27,33 +27,9 @@ struct SettingsRootView: View {
                     .tabItem { Label("General", systemImage: "gearshape") }
                     .tag(SettingsTab.general)
 
-                ChannelsSettings()
-                    .tabItem { Label("Channels", systemImage: "link") }
-                    .tag(SettingsTab.channels)
-
                 VoiceWakeSettings(state: self.state, isActive: self.selectedTab == .voiceWake)
                     .tabItem { Label("Voice Wake", systemImage: "waveform.circle") }
                     .tag(SettingsTab.voiceWake)
-
-                ConfigSettings()
-                    .tabItem { Label("Config", systemImage: "slider.horizontal.3") }
-                    .tag(SettingsTab.config)
-
-                InstancesSettings()
-                    .tabItem { Label("Instances", systemImage: "network") }
-                    .tag(SettingsTab.instances)
-
-                SessionsSettings()
-                    .tabItem { Label("Sessions", systemImage: "clock.arrow.circlepath") }
-                    .tag(SettingsTab.sessions)
-
-                CronSettings()
-                    .tabItem { Label("Cron", systemImage: "calendar") }
-                    .tag(SettingsTab.cron)
-
-                SkillsSettings(state: self.state)
-                    .tabItem { Label("Skills", systemImage: "sparkles") }
-                    .tag(SettingsTab.skills)
 
                 PermissionsSettings(
                     status: self.permissionMonitor.status,
@@ -61,12 +37,6 @@ struct SettingsRootView: View {
                     showOnboarding: { DebugActions.restartOnboarding() })
                     .tabItem { Label("Permissions", systemImage: "lock.shield") }
                     .tag(SettingsTab.permissions)
-
-                if self.state.debugPaneEnabled {
-                    DebugSettings(state: self.state)
-                        .tabItem { Label("Debug", systemImage: "ant") }
-                        .tag(SettingsTab.debug)
-                }
 
                 AboutSettings(updater: self.updater)
                     .tabItem { Label("About", systemImage: "info.circle") }
@@ -86,14 +56,9 @@ struct SettingsRootView: View {
         }
         .onAppear {
             if let pending = SettingsTabRouter.consumePending() {
-                self.selectedTab = self.validTab(for: pending)
+                self.selectedTab = pending
             }
             self.updatePermissionMonitoring(for: self.selectedTab)
-        }
-        .onChange(of: self.state.debugPaneEnabled) { _, enabled in
-            if !enabled, self.selectedTab == .debug {
-                self.selectedTab = .general
-            }
         }
         .onChange(of: self.selectedTab) { _, newValue in
             self.updatePermissionMonitoring(for: newValue)
@@ -110,7 +75,6 @@ struct SettingsRootView: View {
     }
 
     private var nixManagedBanner: some View {
-        // Prefer gateway-resolved paths; fall back to local env defaults if disconnected.
         let configPath = self.snapshotPaths.configPath ?? OpenClawPaths.configURL.path
         let stateDir = self.snapshotPaths.stateDir ?? OpenClawPaths.stateDirURL.path
 
@@ -137,11 +101,6 @@ struct SettingsRootView: View {
         .padding(.horizontal, 10)
         .background(Color.gray.opacity(0.12))
         .cornerRadius(10)
-    }
-
-    private func validTab(for requested: SettingsTab) -> SettingsTab {
-        if requested == .debug, !self.state.debugPaneEnabled { return .general }
-        return requested
     }
 
     @MainActor
@@ -176,21 +135,14 @@ struct SettingsRootView: View {
 }
 
 enum SettingsTab: CaseIterable {
-    case general, channels, skills, sessions, cron, config, instances, voiceWake, permissions, debug, about
-    static let windowWidth: CGFloat = 824 // wider
-    static let windowHeight: CGFloat = 790 // +10% (more room)
+    case general, voiceWake, permissions, about
+    static let windowWidth: CGFloat = 824
+    static let windowHeight: CGFloat = 790
     var title: String {
         switch self {
         case .general: "General"
-        case .channels: "Channels"
-        case .skills: "Skills"
-        case .sessions: "Sessions"
-        case .cron: "Cron"
-        case .config: "Config"
-        case .instances: "Instances"
         case .voiceWake: "Voice Wake"
         case .permissions: "Permissions"
-        case .debug: "Debug"
         case .about: "About"
         }
     }
@@ -198,15 +150,8 @@ enum SettingsTab: CaseIterable {
     var systemImage: String {
         switch self {
         case .general: "gearshape"
-        case .channels: "link"
-        case .skills: "sparkles"
-        case .sessions: "clock.arrow.circlepath"
-        case .cron: "calendar"
-        case .config: "slider.horizontal.3"
-        case .instances: "network"
         case .voiceWake: "waveform.circle"
         case .permissions: "lock.shield"
-        case .debug: "ant"
         case .about: "info.circle"
         }
     }
