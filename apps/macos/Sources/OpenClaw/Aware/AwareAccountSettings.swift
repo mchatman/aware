@@ -6,15 +6,10 @@ private let log = Logger(subsystem: "ai.aware", category: "account.settings")
 
 struct AwareAccountSettings: View {
     private let auth = AwareAuthManager.shared
+    private let api = AwareAPIClient.shared
 
-    @State private var googleStatus: GoogleStatus = .loading
-    @State private var isLoading = true
-
-    enum GoogleStatus {
-        case loading
-        case connected
-        case notConnected
-    }
+    @State private var googleStatus: Aware.GoogleStatus?
+    @State private var isLoadingGoogle = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -57,28 +52,40 @@ struct AwareAccountSettings: View {
             // MARK: Google
             GroupBox("Google") {
                 VStack(alignment: .leading, spacing: 12) {
-                    switch googleStatus {
-                    case .loading:
+                    if isLoadingGoogle {
                         ProgressView()
                             .controlSize(.small)
-                    case .connected:
+                    } else if let status = googleStatus, status.connected {
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
-                            Text("Google connected")
-                                .font(.body)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Google connected")
+                                    .font(.body)
+                                if let email = status.email {
+                                    Text(email)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                             Spacer()
+                            Button("Disconnect") {
+                                Task { await disconnectGoogle() }
+                            }
                         }
-                    case .notConnected:
+                    } else {
                         HStack {
                             Image(systemName: "xmark.circle")
                                 .foregroundStyle(.secondary)
                             Text("Google not connected")
                             Spacer()
+                            Button("Connect Google") {
+                                Task { await connectGoogle() }
+                            }
                         }
                     }
 
-                    Text("Gmail, Calendar, Drive, and Contacts access via gog CLI.")
+                    Text("Gmail, Calendar, Drive, and Contacts access.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -104,20 +111,39 @@ struct AwareAccountSettings: View {
     // MARK: - Helpers
 
     private func loadGoogleStatus() async {
-        googleStatus = .loading
+        isLoadingGoogle = true
+        defer { isLoadingGoogle = false }
 
         do {
-            let report = try await GatewayConnection.shared.skillsStatus()
-            // Check if the "gog" skill is installed and has no missing binaries.
-            if let gogSkill = report.skills.first(where: { $0.name == "gog" }),
-               gogSkill.missing.bins.isEmpty {
-                googleStatus = .connected
-            } else {
-                googleStatus = .notConnected
-            }
+            googleStatus = try await api.googleStatus()
         } catch {
-            log.error("Failed to load skills status: \(error)")
-            googleStatus = .notConnected
+            log.error("Failed to load Google status: \(error)")
+            googleStatus = nil
+        }
+    }
+
+    private func connectGoogle() async {
+        guard let url = await api.googleAuthUrl(),
+              let authUrl = URL(string: url) else {
+            log.error("Failed to build Google auth URL")
+            return
+        }
+        NSWorkspace.shared.open(authUrl)
+
+        // Poll for status after a delay (user completes OAuth in browser).
+        Task {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            await loadGoogleStatus()
+        }
+    }
+
+    private func disconnectGoogle() async {
+        do {
+            try await api.googleDisconnect()
+            googleStatus = Aware.GoogleStatus(connected: false, email: nil, scopes: nil, connectedAt: nil)
+            log.info("Disconnected Google")
+        } catch {
+            log.error("Failed to disconnect Google: \(error)")
         }
     }
 }

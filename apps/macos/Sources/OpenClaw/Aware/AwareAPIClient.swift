@@ -91,6 +91,22 @@ actor AwareAPIClient {
         let _: EmptyData = try await post("/auth/logout", body: nil)
     }
 
+    // MARK: Google
+
+    func googleStatus() async throws -> Aware.GoogleStatus {
+        try await get("/auth/google/status")
+    }
+
+    func googleDisconnect() async throws {
+        let _: EmptyData = try await delete("/auth/google")
+    }
+
+    /// Returns the OAuth URL for connecting Google. Opens in browser.
+    func googleAuthUrl() async -> String? {
+        guard let token = accessToken else { return nil }
+        return "\(baseURL)/auth/google?token=\(token)"
+    }
+
     // MARK: - Private Helpers
 
     /// Placeholder type for endpoints that return no meaningful data.
@@ -102,6 +118,10 @@ actor AwareAPIClient {
 
     private func post<T: Codable & Sendable>(_ path: String, body: [String: String]?) async throws -> T {
         try await request("POST", path: path, body: body, authenticated: true)
+    }
+
+    private func delete<T: Codable & Sendable>(_ path: String) async throws -> T {
+        try await request("DELETE", path: path, body: nil, authenticated: true)
     }
 
     private func request<T: Codable & Sendable>(

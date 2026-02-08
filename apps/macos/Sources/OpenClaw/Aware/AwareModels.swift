@@ -49,4 +49,13 @@ enum Aware {
         let user: User
     }
 
+    // MARK: Google
+
+    struct GoogleStatus: Codable, Sendable {
+        let connected: Bool
+        let email: String?
+        let scopes: String?
+        let connectedAt: String?
+    }
+
 }
