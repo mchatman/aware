@@ -205,22 +205,15 @@ struct NotchHomeView: View {
                     .foregroundColor(.white.opacity(0.7))
                     .frame(width: 24, height: 24)
 
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .frame(width: 24, height: 24)
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear.onAppear {
-                                // Store the gear icon frame for click detection
-                                let frame = geo.frame(in: .global)
-                                NotchSettingsAction.gearFrame = frame
-                            }
-                            .onChange(of: geo.frame(in: .global)) { _, newFrame in
-                                NotchSettingsAction.gearFrame = newFrame
-                            }
-                        }
-                    )
+                Button(action: {
+                    AwareSettingsWindowController.shared.showWindow()
+                }) {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 18)
@@ -343,20 +336,6 @@ struct NotchHomeView: View {
         case .connected: .green
         case .connecting: .gray
         case .disconnected: .red
-        }
-    }
-}
-
-// MARK: - Settings Action (with global click monitor for non-activating panel)
-
-@MainActor
-enum NotchSettingsAction {
-    static var gearFrame: CGRect = .zero
-
-    static func open() {
-        NSApp.activate(ignoringOtherApps: true)
-        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
         }
     }
 }
