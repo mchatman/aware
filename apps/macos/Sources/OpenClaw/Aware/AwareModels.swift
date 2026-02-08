@@ -49,21 +49,4 @@ enum Aware {
         let user: User
     }
 
-    // MARK: OAuth
-
-    struct OAuthConnection: Codable, Sendable, Identifiable {
-        let id: String
-        let provider: String
-        let providerAccountId: String
-        let scope: String?
-        let createdAt: String
-    }
-
-    struct OAuthAuthorizeResponse: Codable, Sendable {
-        let url: String
-        let state: String
-    }
-
-    /// `GET /api/oauth/connections` returns `{ data: { connections: [...] } }`
-    struct ConnectionsWrapper: Codable, Sendable { let connections: [OAuthConnection] }
 }

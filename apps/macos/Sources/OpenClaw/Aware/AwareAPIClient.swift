@@ -97,23 +97,6 @@ actor AwareAPIClient {
         let _: EmptyData = try await post("/auth/logout", body: nil)
     }
 
-    // MARK: OAuth
-
-    func getOAuthURL(provider: String, scopes: String?) async throws -> Aware.OAuthAuthorizeResponse {
-        var path = "/oauth/\(provider)/authorize"
-        if let scopes { path += "?scopes=\(scopes)" }
-        return try await get(path)
-    }
-
-    func listConnections() async throws -> [Aware.OAuthConnection] {
-        let wrapper: Aware.ConnectionsWrapper = try await get("/oauth/connections")
-        return wrapper.connections
-    }
-
-    func removeConnection(id: String) async throws {
-        let _: EmptyData = try await delete("/oauth/connections/\(id)")
-    }
-
     // MARK: - Private Helpers
 
     /// Placeholder type for endpoints that return no meaningful data.
@@ -125,10 +108,6 @@ actor AwareAPIClient {
 
     private func post<T: Codable & Sendable>(_ path: String, body: [String: String]?) async throws -> T {
         try await request("POST", path: path, body: body, authenticated: true)
-    }
-
-    private func delete<T: Codable & Sendable>(_ path: String) async throws -> T {
-        try await request("DELETE", path: path, body: nil, authenticated: true)
     }
 
     private func request<T: Codable & Sendable>(

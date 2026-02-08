@@ -6,9 +6,8 @@ private let log = Logger(subsystem: "ai.aware", category: "account.settings")
 
 struct AwareAccountSettings: View {
     private let auth = AwareAuthManager.shared
-    private let api = AwareAPIClient.shared
 
-    @State private var googleConnections: [Aware.OAuthConnection] = []
+    @State private var googleAccount: String?
     @State private var isLoading = true
 
     var body: some View {
@@ -50,20 +49,20 @@ struct AwareAccountSettings: View {
                     if isLoading {
                         ProgressView()
                             .controlSize(.small)
-                    } else if let conn = googleConnections.first(where: { $0.provider == "google" }) {
+                    } else if let account = googleAccount {
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Google connected")
                                     .font(.body)
-                                Text(conn.providerAccountId)
+                                Text(account)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
                             Button("Disconnect") {
-                                Task { await disconnectGoogle(id: conn.id) }
+                                Task { await disconnectGoogle() }
                             }
                         }
                     } else {
@@ -72,9 +71,6 @@ struct AwareAccountSettings: View {
                                 .foregroundStyle(.secondary)
                             Text("Google not connected")
                             Spacer()
-                            Button("Connect Google") {
-                                connectGoogle()
-                            }
                         }
                     }
 
@@ -88,40 +84,45 @@ struct AwareAccountSettings: View {
             Spacer()
         }
         .padding(20)
-        .task { await loadConnections() }
+        .task { await loadGoogleStatus() }
     }
 
     // MARK: - Helpers
 
-    private func loadConnections() async {
+    private func loadGoogleStatus() async {
         isLoading = true
         defer { isLoading = false }
 
         do {
-            googleConnections = try await api.listConnections()
+            let data = try await GatewayConnection.shared.requestRaw(method: .configGet)
+            googleAccount = Self.extractGmailAccount(from: data)
         } catch {
-            log.error("Failed to load connections: \(error)")
-            googleConnections = []
+            log.error("Failed to load gateway config: \(error)")
+            googleAccount = nil
         }
     }
 
-    private func connectGoogle() {
-        Task {
-            do {
-                let resp = try await api.getOAuthURL(provider: "google", scopes: nil)
-                if let url = URL(string: resp.url) {
-                    NSWorkspace.shared.open(url)
-                }
-            } catch {
-                log.error("Failed to get Google auth URL: \(error)")
-            }
+    /// Extracts `hooks.gmail.account` from the gateway config JSON.
+    static func extractGmailAccount(from data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let hooks = json["hooks"] as? [String: Any],
+              let gmail = hooks["gmail"] as? [String: Any],
+              let account = gmail["account"] as? String,
+              !account.isEmpty else {
+            return nil
         }
+        return account
     }
 
-    private func disconnectGoogle(id: String) async {
+    private func disconnectGoogle() async {
         do {
-            try await api.removeConnection(id: id)
-            googleConnections.removeAll { $0.id == id }
+            // Remove the gmail hook config via gateway config.patch
+            try await GatewayConnection.shared.requestVoid(
+                method: .configPatch,
+                params: ["raw": AnyCodable("{\"hooks\":{\"gmail\":{\"account\":null}}}")]
+            )
+            googleAccount = nil
+            log.info("Disconnected Google (removed hooks.gmail.account)")
         } catch {
             log.error("Failed to disconnect Google: \(error)")
         }
