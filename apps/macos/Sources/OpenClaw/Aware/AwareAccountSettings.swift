@@ -31,16 +31,9 @@ struct AwareAccountSettings: View {
                             Button("Sign Out") {
                                 Task {
                                     await auth.logout()
-                                    // Clear saved connection config.
-                                    let state = AppStateStore.shared
-                                    state.connectionMode = .unconfigured
-                                    state.remoteUrl = ""
-                                    // Remove gateway remote URL from config file on disk.
-                                    OpenClawConfigFile.updateGatewayDict { gateway in
-                                        gateway.removeValue(forKey: "remote")
-                                    }
-                                    // Fully disconnect: stop gateway, tunnels, control channel.
-                                    await ConnectionModeCoordinator.shared.apply(mode: .unconfigured, paused: false)
+                                    // Disconnect the gateway (auth gate will prevent reconnection).
+                                    await GatewayConnection.shared.shutdown()
+                                    await ControlChannel.shared.disconnect()
                                     // Close settings and return to auth screen.
                                     AwareSettingsWindowController.shared.close()
                                     AwareAppCoordinator.shared.start()

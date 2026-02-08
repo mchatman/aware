@@ -87,11 +87,23 @@ final class ControlChannel {
     }
 
     func configure() async {
+        let isAuthenticated = await MainActor.run { AwareAuthManager.shared.isAuthenticated }
+        guard isAuthenticated else {
+            self.logger.info("control channel skipping configure — not authenticated")
+            self.state = .disconnected
+            return
+        }
         self.logger.info("control channel configure mode=local")
         await self.refreshEndpoint(reason: "configure")
     }
 
     func configure(mode: Mode = .local) async throws {
+        let isAuthenticated = await MainActor.run { AwareAuthManager.shared.isAuthenticated }
+        guard isAuthenticated else {
+            self.logger.info("control channel skipping configure — not authenticated")
+            self.state = .disconnected
+            return
+        }
         switch mode {
         case .local:
             await self.configure()
@@ -113,6 +125,14 @@ final class ControlChannel {
     }
 
     func refreshEndpoint(reason: String) async {
+        // Gate on Aware auth — don't connect if user is not signed in.
+        let isAuthenticated = await MainActor.run { AwareAuthManager.shared.isAuthenticated }
+        guard isAuthenticated else {
+            self.logger.info("control channel skipping refresh — not authenticated")
+            self.state = .disconnected
+            return
+        }
+
         self.logger.info("control channel refresh endpoint reason=\(reason, privacy: .public)")
         self.state = .connecting
         do {
