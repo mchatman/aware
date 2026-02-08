@@ -120,6 +120,12 @@ actor GatewayConnection {
         params: [String: AnyCodable]?,
         timeoutMs: Double? = nil) async throws -> Data
     {
+        // Gate on Aware auth — block all gateway requests when signed out.
+        let isAuthenticated = await MainActor.run { AwareAuthManager.shared.isAuthenticated }
+        guard isAuthenticated else {
+            throw NSError(domain: "Gateway", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated — sign in to access the gateway"])
+        }
+
         let cfg = try await self.configProvider()
         await self.configure(url: cfg.url, token: cfg.token, password: cfg.password)
         guard let client else {
@@ -247,6 +253,8 @@ actor GatewayConnection {
 
     /// Ensure the underlying socket is configured (and replaced if config changed).
     func refresh() async throws {
+        let isAuthenticated = await MainActor.run { AwareAuthManager.shared.isAuthenticated }
+        guard isAuthenticated else { return }
         let cfg = try await self.configProvider()
         await self.configure(url: cfg.url, token: cfg.token, password: cfg.password)
     }
