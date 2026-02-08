@@ -21,14 +21,26 @@ enum Aware {
 
     struct AuthResponse: Codable, Sendable {
         let user: User
-        let accessToken: String
-        let refreshToken: String
+        let token: String
+        let gateway: Gateway?
+
+        // Map `token` to accessToken for compatibility
+        var accessToken: String { token }
+        // No refresh token in this API
+        var refreshToken: String { token }
+    }
+
+    struct Gateway: Codable, Sendable {
+        let shortId: String
+        let status: String
+        let endpoint: String?
+        let token: String?
     }
 
     struct User: Codable, Sendable, Identifiable {
         let id: String
         let email: String
-        let name: String
+        var name: String? = nil
         var createdAt: String?
     }
 

@@ -69,10 +69,9 @@ actor AwareAPIClient {
     // MARK: Auth
 
     func register(email: String, password: String, name: String) async throws -> Aware.AuthResponse {
-        try await post("/auth/register", body: [
+        try await post("/auth/signup", body: [
             "email": email,
             "password": password,
-            "name": name,
         ])
     }
 
