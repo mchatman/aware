@@ -102,10 +102,11 @@ struct AwareAccountSettings: View {
         }
     }
 
-    /// Extracts `hooks.gmail.account` from the gateway config JSON.
+    /// Extracts `config.hooks.gmail.account` from the gateway config snapshot JSON.
     static func extractGmailAccount(from data: Data) -> String? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let hooks = json["hooks"] as? [String: Any],
+              let config = json["config"] as? [String: Any],
+              let hooks = config["hooks"] as? [String: Any],
               let gmail = hooks["gmail"] as? [String: Any],
               let account = gmail["account"] as? String,
               !account.isEmpty else {

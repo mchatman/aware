@@ -18,27 +18,18 @@ final class AwareAppCoordinator {
         log.info("Aware coordinator starting")
 
         Task {
-            // Step 1: Restore existing session (if any).
+            // Try to restore existing Aware session.
             await auth.initialize()
 
             if auth.isAuthenticated {
-                log.info("Session restored — proceeding to main app")
-                enterMainApp()
+                log.info("Aware session restored")
             } else {
-                log.info("No session — showing auth window")
-                showAuth()
+                log.info("No Aware session — continuing without auth")
             }
-        }
-    }
 
-    // MARK: - Auth
-
-    private func showAuth() {
-        AwareAuthWindowController.shared.show { [weak self] in
-            log.info("Auth succeeded")
-            Task { @MainActor in
-                self?.enterMainApp()
-            }
+            // Always proceed to main app. Aware auth is optional;
+            // the gateway can work independently.
+            enterMainApp()
         }
     }
 
@@ -62,15 +53,12 @@ final class AwareAppCoordinator {
     // MARK: - Gateway Connection
 
     private func connectToGateway() {
-        guard let gateway = auth.gateway else {
-            log.warning("No gateway info from auth — skipping gateway connection")
-            return
-        }
-
-        guard let endpoint = gateway.endpoint,
+        // If Aware auth provided gateway info, use it to connect.
+        guard let gateway = auth.gateway,
+              let endpoint = gateway.endpoint,
               !endpoint.isEmpty,
               gateway.status == "running" else {
-            log.info("Gateway not ready (status: \(gateway.status, privacy: .public)) — skipping gateway connection")
+            log.info("No gateway info from auth — using existing connection mode")
             return
         }
 
