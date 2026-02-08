@@ -82,12 +82,6 @@ actor AwareAPIClient {
         ])
     }
 
-    func refreshToken(_ refreshToken: String) async throws -> Aware.AuthResponse {
-        try await post("/auth/refresh", body: [
-            "refreshToken": refreshToken,
-        ])
-    }
-
     func getMe() async throws -> Aware.User {
         let wrapper: Aware.UserWrapper = try await get("/auth/me")
         return wrapper.user

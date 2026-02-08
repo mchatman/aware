@@ -6,7 +6,6 @@ private let log = Logger(subsystem: "ai.aware", category: "auth")
 
 private let keychainService = "ai.aware.tokens"
 private let accessTokenKey = "aware.accessToken"
-private let refreshTokenKey = "aware.refreshToken"
 private let currentUserDefaultsKey = "aware.currentUser"
 
 // MARK: - Auth Manager
@@ -39,19 +38,25 @@ final class AwareAuthManager {
         // Restore cached user for instant UI while we validate.
         restoreCachedUser()
 
-        guard let storedRefresh = loadFromKeychain(key: refreshTokenKey) else {
-            log.info("No stored refresh token — user is signed out")
+        guard let storedToken = loadFromKeychain(key: accessTokenKey) else {
+            log.info("No stored access token — user is signed out")
             clearSession()
             return
         }
 
-        // Try refreshing the access token.
+        // Set the token so the API client can make authenticated requests.
+        await api.setAccessToken(storedToken)
+
+        // Validate the token by fetching the current user.
         do {
-            let auth = try await api.refreshToken(storedRefresh)
-            await applyAuth(auth)
-            log.info("Session restored via token refresh")
+            let user = try await api.getMe()
+            currentUser = user
+            cacheUser(user)
+            isAuthenticated = true
+            error = nil
+            log.info("Session restored via /auth/me")
         } catch {
-            log.warning("Token refresh failed: \(error.localizedDescription, privacy: .public)")
+            log.warning("Session validation failed: \(error.localizedDescription, privacy: .public)")
             clearSession()
         }
     }
@@ -103,28 +108,10 @@ final class AwareAuthManager {
         log.info("Logged out")
     }
 
-    /// Attempts to refresh the access token.  Returns `true` on success.
-    @discardableResult
-    func refreshTokenIfNeeded() async -> Bool {
-        guard let storedRefresh = loadFromKeychain(key: refreshTokenKey) else {
-            return false
-        }
-
-        do {
-            let auth = try await api.refreshToken(storedRefresh)
-            await applyAuth(auth)
-            return true
-        } catch {
-            log.warning("Refresh failed: \(error.localizedDescription, privacy: .public)")
-            return false
-        }
-    }
-
     // MARK: - Private Helpers
 
     private func applyAuth(_ auth: Aware.AuthResponse) async {
         saveToKeychain(key: accessTokenKey, value: auth.accessToken)
-        saveToKeychain(key: refreshTokenKey, value: auth.refreshToken)
         cacheUser(auth.user)
 
         await api.setAccessToken(auth.accessToken)
@@ -137,7 +124,6 @@ final class AwareAuthManager {
 
     private func clearSession() {
         deleteFromKeychain(key: accessTokenKey)
-        deleteFromKeychain(key: refreshTokenKey)
         UserDefaults.standard.removeObject(forKey: currentUserDefaultsKey)
 
         Task { await api.setAccessToken(nil) }

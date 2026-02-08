@@ -22,14 +22,23 @@ final class AwareAppCoordinator {
             await auth.initialize()
 
             if auth.isAuthenticated {
-                log.info("Aware session restored")
+                log.info("Session restored — proceeding to main app")
+                enterMainApp()
             } else {
-                log.info("No Aware session — continuing without auth")
+                log.info("No session — showing auth window")
+                showAuth()
             }
+        }
+    }
 
-            // Always proceed to main app. Aware auth is optional;
-            // the gateway can work independently.
-            enterMainApp()
+    // MARK: - Auth
+
+    private func showAuth() {
+        AwareAuthWindowController.shared.show { [weak self] in
+            log.info("Auth succeeded")
+            Task { @MainActor in
+                self?.enterMainApp()
+            }
         }
     }
 
