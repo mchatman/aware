@@ -1,7 +1,6 @@
 import AppKit
 import Darwin
 import Foundation
-import MenuBarExtraAccess
 import Observation
 import OSLog
 import Security
@@ -14,22 +13,8 @@ struct OpenClawApp: App {
     private static let logger = Logger(subsystem: "ai.openclaw", category: "app")
     private let gatewayManager = GatewayProcessManager.shared
     private let controlChannel = ControlChannel.shared
-    private let activityStore = WorkActivityStore.shared
     private let connectivityCoordinator = GatewayConnectivityCoordinator.shared
-    @State private var statusItem: NSStatusItem?
-    @State private var isMenuPresented = false
-    @State private var isPanelVisible = false
     @State private var tailscaleService = TailscaleService.shared
-
-    @MainActor
-    private func updateStatusHighlight() {
-        self.statusItem?.button?.highlight(self.isPanelVisible)
-    }
-
-    @MainActor
-    private func updateHoverHUDSuppression() {
-        HoverHUDController.shared.setSuppressed(self.isMenuPresented || self.isPanelVisible)
-    }
 
     init() {
         OpenClawLogging.bootstrapIfNeeded()
@@ -38,45 +23,6 @@ struct OpenClawApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra { MenuContent(state: self.state, updater: self.delegate.updaterController) } label: {
-            CritterStatusLabel(
-                isPaused: self.state.isPaused,
-                isSleeping: self.isGatewaySleeping,
-                isWorking: self.state.isWorking,
-                earBoostActive: self.state.earBoostActive,
-                blinkTick: self.state.blinkTick,
-                sendCelebrationTick: self.state.sendCelebrationTick,
-                gatewayStatus: self.gatewayManager.status,
-                animationsEnabled: self.state.iconAnimationsEnabled && !self.isGatewaySleeping,
-                iconState: self.effectiveIconState)
-        }
-        .menuBarExtraStyle(.menu)
-        .menuBarExtraAccess(isPresented: self.$isMenuPresented) { item in
-            self.statusItem = item
-            MenuSessionsInjector.shared.install(into: item)
-            self.applyStatusItemAppearance(paused: self.state.isPaused, sleeping: self.isGatewaySleeping)
-            self.installStatusItemMouseHandler(for: item)
-            self.updateHoverHUDSuppression()
-        }
-        .onChange(of: self.state.isPaused) { _, paused in
-            self.applyStatusItemAppearance(paused: paused, sleeping: self.isGatewaySleeping)
-            if self.state.connectionMode == .local {
-                self.gatewayManager.setActive(!paused)
-            } else {
-                self.gatewayManager.stop()
-            }
-        }
-        .onChange(of: self.controlChannel.state) { _, _ in
-            self.applyStatusItemAppearance(paused: self.state.isPaused, sleeping: self.isGatewaySleeping)
-        }
-        .onChange(of: self.gatewayManager.status) { _, _ in
-            self.applyStatusItemAppearance(paused: self.state.isPaused, sleeping: self.isGatewaySleeping)
-        }
-        .onChange(of: self.state.connectionMode) { _, mode in
-            Task { await ConnectionModeCoordinator.shared.apply(mode: mode, paused: self.state.isPaused) }
-            CLIInstallPrompter.shared.checkAndPromptIfNeeded(reason: "connection-mode")
-        }
-
         Settings {
             SettingsRootView(state: self.state, updater: self.delegate.updaterController)
                 .frame(width: SettingsTab.windowWidth, height: SettingsTab.windowHeight, alignment: .topLeading)
@@ -84,14 +30,17 @@ struct OpenClawApp: App {
         }
         .defaultSize(width: SettingsTab.windowWidth, height: SettingsTab.windowHeight)
         .windowResizability(.contentSize)
-        .onChange(of: self.isMenuPresented) { _, _ in
-            self.updateStatusHighlight()
-            self.updateHoverHUDSuppression()
+        .onChange(of: self.state.isPaused) { _, paused in
+            if self.state.connectionMode == .local {
+                self.gatewayManager.setActive(!paused)
+            } else {
+                self.gatewayManager.stop()
+            }
         }
-    }
-
-    private func applyStatusItemAppearance(paused: Bool, sleeping: Bool) {
-        self.statusItem?.button?.appearsDisabled = paused || sleeping
+        .onChange(of: self.state.connectionMode) { _, mode in
+            Task { await ConnectionModeCoordinator.shared.apply(mode: mode, paused: self.state.isPaused) }
+            CLIInstallPrompter.shared.checkAndPromptIfNeeded(reason: "connection-mode")
+        }
     }
 
     private static func applyAttachOnlyOverrideIfNeeded() {
@@ -108,144 +57,6 @@ struct OpenClawApp: App {
                 port: GatewayEnvironment.gatewayPort())
         }
         Self.logger.info("attach-only flag enabled")
-    }
-
-    private var isGatewaySleeping: Bool {
-        if self.state.isPaused { return false }
-        switch self.state.connectionMode {
-        case .unconfigured:
-            return true
-        case .remote:
-            if case .connected = self.controlChannel.state { return false }
-            return true
-        case .local:
-            switch self.gatewayManager.status {
-            case .running, .starting, .attachedExisting:
-                if case .connected = self.controlChannel.state { return false }
-                return true
-            case .failed, .stopped:
-                return true
-            }
-        }
-    }
-
-    @MainActor
-    private func installStatusItemMouseHandler(for item: NSStatusItem) {
-        guard let button = item.button else { return }
-        if button.subviews.contains(where: { $0 is StatusItemMouseHandlerView }) { return }
-
-        WebChatManager.shared.onPanelVisibilityChanged = { [self] visible in
-            self.isPanelVisible = visible
-            self.updateStatusHighlight()
-            self.updateHoverHUDSuppression()
-        }
-        CanvasManager.shared.onPanelVisibilityChanged = { [self] visible in
-            self.state.canvasPanelVisible = visible
-        }
-        CanvasManager.shared.defaultAnchorProvider = { [self] in self.statusButtonScreenFrame() }
-
-        let handler = StatusItemMouseHandlerView()
-        handler.translatesAutoresizingMaskIntoConstraints = false
-        handler.onLeftClick = { [self] in
-            HoverHUDController.shared.dismiss(reason: "statusItemClick")
-            self.toggleWebChatPanel()
-        }
-        handler.onRightClick = { [self] in
-            HoverHUDController.shared.dismiss(reason: "statusItemRightClick")
-            WebChatManager.shared.closePanel()
-            self.isMenuPresented = true
-            self.updateStatusHighlight()
-        }
-        handler.onHoverChanged = { [self] inside in
-            HoverHUDController.shared.statusItemHoverChanged(
-                inside: inside,
-                anchorProvider: { [self] in self.statusButtonScreenFrame() })
-        }
-
-        button.addSubview(handler)
-        NSLayoutConstraint.activate([
-            handler.leadingAnchor.constraint(equalTo: button.leadingAnchor),
-            handler.trailingAnchor.constraint(equalTo: button.trailingAnchor),
-            handler.topAnchor.constraint(equalTo: button.topAnchor),
-            handler.bottomAnchor.constraint(equalTo: button.bottomAnchor),
-        ])
-    }
-
-    @MainActor
-    private func toggleWebChatPanel() {
-        HoverHUDController.shared.setSuppressed(true)
-        self.isMenuPresented = false
-        Task { @MainActor in
-            let sessionKey = await WebChatManager.shared.preferredSessionKey()
-            WebChatManager.shared.togglePanel(
-                sessionKey: sessionKey,
-                anchorProvider: { [self] in self.statusButtonScreenFrame() })
-        }
-    }
-
-    @MainActor
-    private func statusButtonScreenFrame() -> NSRect? {
-        guard let button = self.statusItem?.button, let window = button.window else { return nil }
-        let inWindow = button.convert(button.bounds, to: nil)
-        return window.convertToScreen(inWindow)
-    }
-
-    private var effectiveIconState: IconState {
-        let selection = self.state.iconOverride
-        if selection == .system {
-            return self.activityStore.iconState
-        }
-        let overrideState = selection.toIconState()
-        switch overrideState {
-        case let .workingMain(kind): return .overridden(kind)
-        case let .workingOther(kind): return .overridden(kind)
-        case .idle: return .idle
-        case let .overridden(kind): return .overridden(kind)
-        }
-    }
-}
-
-/// Transparent overlay that intercepts clicks without stealing MenuBarExtra ownership.
-private final class StatusItemMouseHandlerView: NSView {
-    var onLeftClick: (() -> Void)?
-    var onRightClick: (() -> Void)?
-    var onHoverChanged: ((Bool) -> Void)?
-    private var tracking: NSTrackingArea?
-
-    override func mouseDown(with event: NSEvent) {
-        if let onLeftClick {
-            onLeftClick()
-        } else {
-            super.mouseDown(with: event)
-        }
-    }
-
-    override func rightMouseDown(with event: NSEvent) {
-        self.onRightClick?()
-        // Do not call super; menu will be driven by isMenuPresented binding.
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let tracking {
-            self.removeTrackingArea(tracking)
-        }
-        let options: NSTrackingArea.Options = [
-            .mouseEnteredAndExited,
-            .activeAlways,
-            .inVisibleRect,
-        ]
-        let area = NSTrackingArea(rect: self.bounds, options: options, owner: self, userInfo: nil)
-        self.addTrackingArea(area)
-        self.tracking = area
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        self.onHoverChanged?(true)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        self.onHoverChanged?(false)
     }
 }
 

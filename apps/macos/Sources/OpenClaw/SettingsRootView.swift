@@ -3,8 +3,6 @@ import SwiftUI
 
 struct SettingsRootView: View {
     @Bindable var state: AppState
-    private let permissionMonitor = PermissionMonitor.shared
-    @State private var monitoringPermissions = false
     @State private var selectedTab: SettingsTab = .general
     @State private var snapshotPaths: (configPath: String?, stateDir: String?) = (nil, nil)
     let updater: UpdaterProviding?
@@ -35,13 +33,6 @@ struct SettingsRootView: View {
                     .tabItem { Label("Voice Wake", systemImage: "waveform.circle") }
                     .tag(SettingsTab.voiceWake)
 
-                PermissionsSettings(
-                    status: self.permissionMonitor.status,
-                    refresh: self.refreshPerms,
-                    showOnboarding: { DebugActions.restartOnboarding() })
-                    .tabItem { Label("Permissions", systemImage: "lock.shield") }
-                    .tag(SettingsTab.permissions)
-
                 AboutSettings(updater: self.updater)
                     .tabItem { Label("About", systemImage: "info.circle") }
                     .tag(SettingsTab.about)
@@ -62,16 +53,8 @@ struct SettingsRootView: View {
             if let pending = SettingsTabRouter.consumePending() {
                 self.selectedTab = pending
             }
-            self.updatePermissionMonitoring(for: self.selectedTab)
         }
-        .onChange(of: self.selectedTab) { _, newValue in
-            self.updatePermissionMonitoring(for: newValue)
-        }
-        .onDisappear { self.stopPermissionMonitoring() }
-        .task {
-            guard !self.isPreview else { return }
-            await self.refreshPerms()
-        }
+        .onDisappear { }
         .task(id: self.state.connectionMode) {
             guard !self.isPreview else { return }
             await self.refreshSnapshotPaths()
@@ -112,34 +95,10 @@ struct SettingsRootView: View {
         let paths = await GatewayConnection.shared.snapshotPaths()
         self.snapshotPaths = paths
     }
-
-    @MainActor
-    private func refreshPerms() async {
-        guard !self.isPreview else { return }
-        await self.permissionMonitor.refreshNow()
-    }
-
-    private func updatePermissionMonitoring(for tab: SettingsTab) {
-        guard !self.isPreview else { return }
-        let shouldMonitor = tab == .permissions
-        if shouldMonitor, !self.monitoringPermissions {
-            self.monitoringPermissions = true
-            PermissionMonitor.shared.register()
-        } else if !shouldMonitor, self.monitoringPermissions {
-            self.monitoringPermissions = false
-            PermissionMonitor.shared.unregister()
-        }
-    }
-
-    private func stopPermissionMonitoring() {
-        guard self.monitoringPermissions else { return }
-        self.monitoringPermissions = false
-        PermissionMonitor.shared.unregister()
-    }
 }
 
 enum SettingsTab: CaseIterable {
-    case account, general, voiceWake, permissions, about
+    case account, general, voiceWake, about
     static let windowWidth: CGFloat = 824
     static let windowHeight: CGFloat = 790
     var title: String {
@@ -147,7 +106,6 @@ enum SettingsTab: CaseIterable {
         case .account: "Account"
         case .general: "General"
         case .voiceWake: "Voice Wake"
-        case .permissions: "Permissions"
         case .about: "About"
         }
     }
@@ -157,7 +115,6 @@ enum SettingsTab: CaseIterable {
         case .account: "person.crop.circle"
         case .general: "gearshape"
         case .voiceWake: "waveform.circle"
-        case .permissions: "lock.shield"
         case .about: "info.circle"
         }
     }

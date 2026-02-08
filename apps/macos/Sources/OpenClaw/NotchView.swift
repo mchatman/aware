@@ -205,10 +205,15 @@ struct NotchHomeView: View {
                     .foregroundColor(.white.opacity(0.7))
                     .frame(width: 24, height: 24)
 
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .frame(width: 24, height: 24)
+                Button {
+                    SettingsWindowOpener.shared.open()
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 18)
