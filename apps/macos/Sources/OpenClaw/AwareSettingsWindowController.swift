@@ -38,7 +38,7 @@ final class AwareSettingsWindowController: NSWindowController, NSWindowDelegate 
         window.toolbarStyle = .unified
         window.isMovableByWindowBackground = true
         window.collectionBehavior = [.managed, .participatesInCycle, .fullScreenAuxiliary]
-        window.hidesOnDeactivate = false
+        window.level = .floating
         window.isExcludedFromWindowsMenu = false
         window.isRestorable = true
         window.identifier = NSUserInterfaceItemIdentifier("AwareSettingsWindow")
