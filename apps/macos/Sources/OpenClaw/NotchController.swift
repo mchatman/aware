@@ -90,6 +90,10 @@ final class NotchController {
                 .environmentObject(self.vm))
 
         window.orderFrontRegardless()
+
+        // Install click monitor for settings gear (non-activating panels don't deliver clicks normally)
+        NotchSettingsAction.installClickMonitor(for: window)
+
         return window
     }
 

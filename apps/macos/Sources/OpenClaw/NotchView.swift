@@ -209,7 +209,18 @@ struct NotchHomeView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
                     .frame(width: 24, height: 24)
-                    .background(NotchClickableArea { NotchSettingsAction.open() })
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.onAppear {
+                                // Store the gear icon frame for click detection
+                                let frame = geo.frame(in: .global)
+                                NotchSettingsAction.gearFrame = frame
+                            }
+                            .onChange(of: geo.frame(in: .global)) { _, newFrame in
+                                NotchSettingsAction.gearFrame = newFrame
+                            }
+                        }
+                    )
             }
         }
         .padding(.horizontal, 18)
@@ -336,41 +347,57 @@ struct NotchHomeView: View {
     }
 }
 
-// MARK: - Settings Action
+// MARK: - Settings Action (with global click monitor for non-activating panel)
 
 @MainActor
 enum NotchSettingsAction {
+    static var gearFrame: CGRect = .zero
+    private static var monitor: Any?
+    private static var globalMonitor: Any?
+
+    static func installClickMonitor(for window: NSWindow) {
+        guard monitor == nil else { return }
+        // Local monitor for when app is active
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            if Self.handleClick(event: event, window: window) {
+                return nil
+            }
+            return event
+        }
+        // Global monitor for when app is NOT active (non-activating panel)
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { event in
+            Self.handleClick(event: event, window: window)
+        }
+    }
+
+    @discardableResult
+    private static func handleClick(event: NSEvent, window: NSWindow) -> Bool {
+        // Get mouse location in screen coordinates
+        let screenPoint = NSEvent.mouseLocation
+        // Check if it's in the notch window
+        guard window.frame.contains(screenPoint) else { return false }
+        // Convert to window-local coordinates
+        let windowPoint = window.convertPoint(fromScreen: screenPoint)
+        // Check against the gear frame (with generous padding)
+        // gearFrame is in SwiftUI coordinates (origin top-left), window coords are bottom-left
+        let windowHeight = window.frame.height
+        let gearInWindow = CGRect(
+            x: gearFrame.origin.x,
+            y: windowHeight - gearFrame.origin.y - gearFrame.height,
+            width: gearFrame.width,
+            height: gearFrame.height
+        ).insetBy(dx: -10, dy: -10)
+        if gearInWindow.contains(windowPoint) {
+            DispatchQueue.main.async { open() }
+            return true
+        }
+        return false
+    }
+
     static func open() {
-        print("[Aware] Settings gear tapped")
         NSApp.activate(ignoringOtherApps: true)
         if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
             NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-        }
-    }
-}
-
-// MARK: - Clickable area that works in non-activating NSPanel
-
-struct NotchClickableArea: NSViewRepresentable {
-    let action: () -> Void
-
-    func makeNSView(context: Context) -> ClickableNSView {
-        let view = ClickableNSView()
-        view.action = action
-        return view
-    }
-
-    func updateNSView(_ nsView: ClickableNSView, context: Context) {
-        nsView.action = action
-    }
-
-    class ClickableNSView: NSView {
-        var action: (() -> Void)?
-
-        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-        override func mouseDown(with event: NSEvent) {
-            action?()
         }
     }
 }
