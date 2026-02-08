@@ -213,13 +213,7 @@ struct NotchHomeView: View {
                         SettingsGearButton()
                             .frame(width: 24, height: 24)
                     )
-                    .onHover { hovering in
-                        // Prevent notch from closing while interacting with settings button
-                        if hovering {
-                            self.hoverWorkItem?.cancel()
-                            self.hoverWorkItem = nil
-                        }
-                    }
+                    .onHover { _ in }
             }
         }
         .padding(.horizontal, 18)
@@ -366,12 +360,10 @@ struct SettingsGearButton: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     class Coordinator: NSObject {
-        @objc func openSettings() {
+        @MainActor @objc func openSettings() {
             print("[Aware] Settings gear tapped (NSButton)")
             NSApp.activate(ignoringOtherApps: true)
-            DispatchQueue.main.async {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-            }
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         }
     }
 }
