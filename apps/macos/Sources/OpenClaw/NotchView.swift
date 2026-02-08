@@ -209,14 +209,10 @@ struct NotchHomeView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
                     .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        print("[Aware] Settings gear tapped")
-                        NSApp.activate(ignoringOtherApps: true)
-                        DispatchQueue.main.async {
-                            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                        }
-                    }
+                    .background(
+                        SettingsGearButton()
+                            .frame(width: 24, height: 24)
+                    )
             }
         }
         .padding(.horizontal, 18)
@@ -339,6 +335,35 @@ struct NotchHomeView: View {
         case .connected: .green
         case .connecting: .gray
         case .disconnected: .red
+        }
+    }
+}
+
+// MARK: - Settings Gear Button (NSView-based for reliable clicks in NSPanel)
+
+struct SettingsGearButton: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(frame: .zero)
+        button.bezelStyle = .inline
+        button.isBordered = false
+        button.isTransparent = true
+        button.title = ""
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.openSettings)
+        return button
+    }
+
+    func updateNSView(_ nsView: NSButton, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    class Coordinator: NSObject {
+        @objc func openSettings() {
+            print("[Aware] Settings gear tapped (NSButton)")
+            NSApp.activate(ignoringOtherApps: true)
+            DispatchQueue.main.async {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            }
         }
     }
 }
