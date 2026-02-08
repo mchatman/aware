@@ -100,6 +100,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Aware: auth → onboarding → main app.
         AwareAppCoordinator.shared.start()
 
+        // Ensure Cmd+Q works even without a menu bar.
+        self.installMinimalMainMenu()
+
         // Initialize push-to-talk hotkey (was previously in MenuContentView)
         let pttEnabled = voiceWakeSupported && AppStateStore.shared.voicePushToTalkEnabled
         VoicePushToTalkHotkey.shared.setEnabled(pttEnabled)
@@ -116,6 +119,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 WebChatManager.shared.show(sessionKey: sessionKey)
             }
         }
+    }
+
+    /// Installs a minimal main menu so Cmd+Q works even without the menu bar UI.
+    private func installMinimalMainMenu() {
+        let mainMenu = NSMenu()
+        let appMenuItem = NSMenuItem()
+        mainMenu.addItem(appMenuItem)
+
+        let appMenu = NSMenu()
+        let quitItem = NSMenuItem(
+            title: "Quit Aware",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
+        appMenu.addItem(quitItem)
+        appMenuItem.submenu = appMenu
+
+        NSApp.mainMenu = mainMenu
     }
 
     func applicationWillTerminate(_ notification: Notification) {
