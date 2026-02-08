@@ -138,6 +138,9 @@ final class ControlChannel {
         do {
             try await self.establishGatewayConnection()
             self.state = .connected
+            // Restart the event stream (needed after sign-out/sign-in cycle
+            // since the old subscription points to a dead client).
+            self.startEventStream()
             PresenceReporter.shared.sendImmediate(reason: "connect")
         } catch {
             let message = self.friendlyGatewayMessage(error)
