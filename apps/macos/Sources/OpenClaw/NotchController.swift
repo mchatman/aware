@@ -38,8 +38,6 @@ class NotchPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
     override func mouseDown(with event: NSEvent) {
         let point = event.locationInWindow
         // Check if click is in the gear icon area (stored by NotchSettingsAction)
