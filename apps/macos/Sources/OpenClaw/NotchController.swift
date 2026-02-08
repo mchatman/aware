@@ -38,6 +38,34 @@ class NotchPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = event.locationInWindow
+        // Check if click is in the gear icon area (stored by NotchSettingsAction)
+        let gearFrame = NotchSettingsAction.gearFrame
+        guard gearFrame != .zero else {
+            super.mouseDown(with: event)
+            return
+        }
+        // Convert SwiftUI coords (top-left origin) to window coords (bottom-left origin)
+        let windowHeight = self.frame.height
+        let gearInWindow = CGRect(
+            x: gearFrame.origin.x,
+            y: windowHeight - gearFrame.origin.y - gearFrame.height,
+            width: gearFrame.width,
+            height: gearFrame.height
+        ).insetBy(dx: -10, dy: -10)
+
+        if gearInWindow.contains(point) {
+            Task { @MainActor in
+                NotchSettingsAction.open()
+            }
+        } else {
+            super.mouseDown(with: event)
+        }
+    }
+
     // Allow clicks to register without requiring the panel to be key first
     override func accessibilityPerformPress() -> Bool { true }
 }
@@ -90,9 +118,6 @@ final class NotchController {
                 .environmentObject(self.vm))
 
         window.orderFrontRegardless()
-
-        // Install click monitor for settings gear (non-activating panels don't deliver clicks normally)
-        NotchSettingsAction.installClickMonitor(for: window)
 
         return window
     }
