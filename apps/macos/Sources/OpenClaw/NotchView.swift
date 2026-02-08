@@ -209,11 +209,7 @@ struct NotchHomeView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
                     .frame(width: 24, height: 24)
-                    .background(
-                        SettingsGearButton()
-                            .frame(width: 24, height: 24)
-                    )
-                    .onHover { _ in }
+                    .background(NotchClickableArea { NotchSettingsAction.open() })
             }
         }
         .padding(.horizontal, 18)
@@ -340,30 +336,41 @@ struct NotchHomeView: View {
     }
 }
 
-// MARK: - Settings Gear Button (NSView-based for reliable clicks in NSPanel)
+// MARK: - Settings Action
 
-struct SettingsGearButton: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSButton {
-        let button = NSButton(frame: .zero)
-        button.bezelStyle = .inline
-        button.isBordered = false
-        button.title = ""
-        button.image = nil
-        button.alphaValue = 0.01 // Nearly invisible but still receives clicks
-        button.target = context.coordinator
-        button.action = #selector(Coordinator.openSettings)
-        return button
+@MainActor
+enum NotchSettingsAction {
+    static func open() {
+        print("[Aware] Settings gear tapped")
+        NSApp.activate(ignoringOtherApps: true)
+        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
+            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        }
+    }
+}
+
+// MARK: - Clickable area that works in non-activating NSPanel
+
+struct NotchClickableArea: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context: Context) -> ClickableNSView {
+        let view = ClickableNSView()
+        view.action = action
+        return view
     }
 
-    func updateNSView(_ nsView: NSButton, context: Context) {}
+    func updateNSView(_ nsView: ClickableNSView, context: Context) {
+        nsView.action = action
+    }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    class ClickableNSView: NSView {
+        var action: (() -> Void)?
 
-    class Coordinator: NSObject {
-        @MainActor @objc func openSettings() {
-            print("[Aware] Settings gear tapped (NSButton)")
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            action?()
         }
     }
 }

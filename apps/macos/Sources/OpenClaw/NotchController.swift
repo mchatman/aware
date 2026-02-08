@@ -37,6 +37,9 @@ class NotchPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    // Allow clicks to register without requiring the panel to be key first
+    override func accessibilityPerformPress() -> Bool { true }
 }
 
 // MARK: - Notch Controller
