@@ -138,19 +138,25 @@ final class NotchController {
 
         // Connection state polling (ControlChannel.state isn't yet push-observable)
         Task { [weak self] in
-            var lastState: ControlChannel.ConnectionState?
+            var lastStatus: String?
             while !Task.isCancelled {
                 guard let self else { return }
                 let current = ControlChannel.shared.state
+                let isAuthenticated = await MainActor.run { AwareAuthManager.shared.isAuthenticated }
 
-                if current != lastState {
-                    lastState = current
-                    let status: String
+                let status: String
+                if !isAuthenticated {
+                    status = "disconnected"
+                } else {
                     switch current {
                     case .connected: status = "connected"
                     case .connecting: status = "connecting"
                     default: status = "disconnected"
                     }
+                }
+
+                if status != lastStatus {
+                    lastStatus = status
                     self.vm.connectionStatus = status
                 }
 
