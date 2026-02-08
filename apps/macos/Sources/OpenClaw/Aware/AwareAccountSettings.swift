@@ -31,6 +31,10 @@ struct AwareAccountSettings: View {
                             Button("Sign Out") {
                                 Task {
                                     await auth.logout()
+                                    // Clear saved connection so gateway doesn't reconnect.
+                                    let state = AppStateStore.shared
+                                    state.connectionMode = .unconfigured
+                                    state.remoteUrl = ""
                                     // Fully disconnect: stop gateway, tunnels, control channel.
                                     await ConnectionModeCoordinator.shared.apply(mode: .unconfigured, paused: false)
                                     // Close settings and return to auth screen.
