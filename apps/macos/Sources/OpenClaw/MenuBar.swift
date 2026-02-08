@@ -99,6 +99,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await PeekabooBridgeHostCoordinator.shared.setEnabled(AppStateStore.shared.peekabooBridgeEnabled) }
         // Aware: auth → onboarding → main app.
         AwareAppCoordinator.shared.start()
+
+        // Initialize push-to-talk hotkey (was previously in MenuContentView)
+        let pttEnabled = voiceWakeSupported && AppStateStore.shared.voicePushToTalkEnabled
+        VoicePushToTalkHotkey.shared.setEnabled(pttEnabled)
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             CLIInstallPrompter.shared.checkAndPromptIfNeeded(reason: "launch")
         }
