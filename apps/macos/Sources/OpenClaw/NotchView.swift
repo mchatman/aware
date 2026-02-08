@@ -205,15 +205,18 @@ struct NotchHomeView: View {
                     .foregroundColor(.white.opacity(0.7))
                     .frame(width: 24, height: 24)
 
-                Button {
-                    SettingsWindowOpener.shared.open()
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.plain)
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        print("[Aware] Settings gear tapped")
+                        NSApp.activate(ignoringOtherApps: true)
+                        DispatchQueue.main.async {
+                            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                        }
+                    }
             }
         }
         .padding(.horizontal, 18)
