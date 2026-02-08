@@ -52,21 +52,22 @@ final class AwareSettingsWindowController: NSWindowController, NSWindowDelegate 
 
     func showWindow() {
         NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
 
-        if window?.isVisible == true {
-            NSApp.activate(ignoringOtherApps: true)
-            window?.orderFrontRegardless()
-            window?.makeKeyAndOrderFront(nil)
+        guard let window else { return }
+
+        if window.isVisible {
+            window.makeKeyAndOrderFront(nil)
             return
         }
 
-        window?.center()
-        window?.orderFrontRegardless()
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        window.level = .floating
 
-        DispatchQueue.main.async { [weak self] in
-            self?.window?.makeKeyAndOrderFront(nil)
+        // Drop back to normal level after it's focused so it behaves like a regular window
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            window.level = .normal
         }
     }
 
