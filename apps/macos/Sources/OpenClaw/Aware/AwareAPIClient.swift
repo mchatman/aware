@@ -97,55 +97,6 @@ actor AwareAPIClient {
         let _: EmptyData = try await post("/auth/logout", body: nil)
     }
 
-    // MARK: Teams
-
-    func createTeam(name: String) async throws -> Aware.Team {
-        let wrapper: Aware.TeamWrapper = try await post("/api/teams", body: ["name": name])
-        return wrapper.team
-    }
-
-    func listTeams() async throws -> [Aware.Team] {
-        let wrapper: Aware.TeamsWrapper = try await get("/api/teams")
-        return wrapper.teams
-    }
-
-    func getTeam(id: String) async throws -> Aware.Team {
-        let wrapper: Aware.TeamWrapper = try await get("/teams/\(id)")
-        return wrapper.team
-    }
-
-    func listTeamMembers(teamId: String) async throws -> [Aware.TeamMember] {
-        let wrapper: Aware.MembersWrapper = try await get("/teams/\(teamId)/members")
-        return wrapper.members
-    }
-
-    func addTeamMember(teamId: String, email: String, role: String) async throws -> Aware.TeamMember {
-        let wrapper: Aware.MemberWrapper = try await post("/teams/\(teamId)/members", body: [
-            "email": email,
-            "role": role,
-        ])
-        return wrapper.member
-    }
-
-    // MARK: Connectors
-
-    func listConnectors(teamId: String) async throws -> [Aware.Connector] {
-        let wrapper: Aware.ConnectorsWrapper = try await get("/teams/\(teamId)/connectors")
-        return wrapper.connectors
-    }
-
-    func enableConnector(teamId: String, provider: String, scopes: String) async throws -> Aware.Connector {
-        let wrapper: Aware.ConnectorWrapper = try await post("/teams/\(teamId)/connectors", body: [
-            "provider": provider,
-            "scopes": scopes,
-        ])
-        return wrapper.connector
-    }
-
-    func disableConnector(teamId: String, connectorId: String) async throws {
-        let _: EmptyData = try await delete("/teams/\(teamId)/connectors/\(connectorId)")
-    }
-
     // MARK: OAuth
 
     func getOAuthURL(provider: String, scopes: String?) async throws -> Aware.OAuthAuthorizeResponse {
@@ -161,33 +112,6 @@ actor AwareAPIClient {
 
     func removeConnection(id: String) async throws {
         let _: EmptyData = try await delete("/oauth/connections/\(id)")
-    }
-
-    // MARK: Billing
-
-    func getSubscription(teamId: String) async throws -> Aware.Subscription {
-        let wrapper: Aware.SubscriptionWrapper = try await get("/teams/\(teamId)/billing")
-        return wrapper.subscription
-    }
-
-    func subscribe(teamId: String, priceId: String) async throws -> String {
-        let resp: Aware.CheckoutResponse = try await post(
-            "/teams/\(teamId)/billing/subscribe",
-            body: ["priceId": priceId]
-        )
-        return resp.url
-    }
-
-    func cancelSubscription(teamId: String) async throws {
-        let _: EmptyData = try await post("/teams/\(teamId)/billing/cancel", body: nil)
-    }
-
-    func getBillingPortalURL(teamId: String, returnUrl: String) async throws -> String {
-        let resp: Aware.PortalResponse = try await post(
-            "/teams/\(teamId)/billing/portal",
-            body: ["returnUrl": returnUrl]
-        )
-        return resp.url
     }
 
     // MARK: - Private Helpers

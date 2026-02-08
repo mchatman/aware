@@ -12,7 +12,6 @@ final class AwareAppCoordinator {
     static let shared = AwareAppCoordinator()
 
     private let auth = AwareAuthManager.shared
-    private let teams = AwareTeamManager.shared
 
     /// Entry point — call once at app launch.
     func start() {
@@ -23,8 +22,8 @@ final class AwareAppCoordinator {
             await auth.initialize()
 
             if auth.isAuthenticated {
-                log.info("Session restored — checking team setup")
-                await proceedAfterAuth()
+                log.info("Session restored — proceeding to main app")
+                enterMainApp()
             } else {
                 log.info("No session — showing auth window")
                 showAuth()
@@ -37,37 +36,6 @@ final class AwareAppCoordinator {
     private func showAuth() {
         AwareAuthWindowController.shared.show { [weak self] in
             log.info("Auth succeeded")
-            Task { @MainActor in
-                await self?.proceedAfterAuth()
-            }
-        }
-    }
-
-    // MARK: - Post-Auth
-
-    private func proceedAfterAuth() async {
-        // Load teams for the authenticated user.
-        await teams.loadTeams()
-
-        if teams.teams.isEmpty {
-            // New user — needs onboarding (create team, connect workspace).
-            log.info("No teams found — showing onboarding")
-            showOnboarding()
-        } else {
-            // Existing user — select their team and proceed.
-            if let team = teams.teams.first {
-                log.info("Selecting team: \(team.name, privacy: .public)")
-                await teams.selectTeam(team)
-            }
-            enterMainApp()
-        }
-    }
-
-    // MARK: - Onboarding
-
-    private func showOnboarding() {
-        AwareOnboardingWindowController.shared.show { [weak self] in
-            log.info("Onboarding complete")
             Task { @MainActor in
                 self?.enterMainApp()
             }
@@ -84,37 +52,36 @@ final class AwareAppCoordinator {
         UserDefaults.standard.set(currentOnboardingVersion, forKey: onboardingVersionKey)
         AppStateStore.shared.onboardingSeen = true
 
-        // Close any lingering auth/onboarding windows.
+        // Close any lingering auth windows.
         AwareAuthWindowController.shared.close()
-        AwareOnboardingWindowController.shared.close()
 
-        // Connect to the team's tenant gateway.
-        connectToTenantGateway()
+        // Connect to the user's gateway.
+        connectToGateway()
     }
 
     // MARK: - Gateway Connection
 
-    private func connectToTenantGateway() {
-        guard let team = teams.currentTeam else {
-            log.warning("No current team — skipping gateway connection")
+    private func connectToGateway() {
+        guard let gateway = auth.gateway else {
+            log.warning("No gateway info from auth — skipping gateway connection")
             return
         }
 
-        guard let gatewayUrl = team.gatewayUrl,
-              !gatewayUrl.isEmpty,
-              team.tenantStatus == "running" else {
-            log.info("Tenant not ready (status: \(team.tenantStatus ?? "none", privacy: .public)) — skipping gateway connection")
+        guard let endpoint = gateway.endpoint,
+              !endpoint.isEmpty,
+              gateway.status == "running" else {
+            log.info("Gateway not ready (status: \(gateway.status, privacy: .public)) — skipping gateway connection")
             return
         }
 
         // Convert HTTP URL to WebSocket URL for the gateway connection.
-        let wsUrl = gatewayUrl
+        let wsUrl = endpoint
             .replacingOccurrences(of: "http://", with: "ws://")
             .replacingOccurrences(of: "https://", with: "wss://")
 
-        log.info("Connecting to tenant gateway: \(wsUrl, privacy: .public)")
+        log.info("Connecting to gateway: \(wsUrl, privacy: .public)")
 
-        // Configure the app to connect to the tenant gateway in direct/remote mode.
+        // Configure the app to connect to the gateway in direct/remote mode.
         let state = AppStateStore.shared
         state.connectionMode = .remote
         state.remoteUrl = wsUrl

@@ -21,6 +21,7 @@ final class AwareAuthManager {
 
     private(set) var isAuthenticated: Bool = false
     private(set) var currentUser: Aware.User?
+    private(set) var gateway: Aware.Gateway?
     private(set) var isLoading: Bool = false
     var error: String?
 
@@ -129,6 +130,7 @@ final class AwareAuthManager {
         await api.setAccessToken(auth.accessToken)
 
         currentUser = auth.user
+        gateway = auth.gateway
         isAuthenticated = true
         error = nil
     }
@@ -141,6 +143,7 @@ final class AwareAuthManager {
         Task { await api.setAccessToken(nil) }
 
         currentUser = nil
+        gateway = nil
         isAuthenticated = false
     }
 
