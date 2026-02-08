@@ -213,6 +213,13 @@ struct NotchHomeView: View {
                         SettingsGearButton()
                             .frame(width: 24, height: 24)
                     )
+                    .onHover { hovering in
+                        // Prevent notch from closing while interacting with settings button
+                        if hovering {
+                            self.hoverWorkItem?.cancel()
+                            self.hoverWorkItem = nil
+                        }
+                    }
             }
         }
         .padding(.horizontal, 18)
@@ -346,8 +353,9 @@ struct SettingsGearButton: NSViewRepresentable {
         let button = NSButton(frame: .zero)
         button.bezelStyle = .inline
         button.isBordered = false
-        button.isTransparent = true
         button.title = ""
+        button.image = nil
+        button.alphaValue = 0.01 // Nearly invisible but still receives clicks
         button.target = context.coordinator
         button.action = #selector(Coordinator.openSettings)
         return button
