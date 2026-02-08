@@ -123,8 +123,7 @@ struct AwareAccountSettings: View {
     }
 
     private func connectGoogle() async {
-        guard let url = await api.googleAuthUrl(),
-              let authUrl = URL(string: url) else {
+        guard let authUrl = await api.googleAuthUrl() else {
             log.error("Failed to build Google auth URL")
             return
         }

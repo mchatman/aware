@@ -102,9 +102,11 @@ actor AwareAPIClient {
     }
 
     /// Returns the OAuth URL for connecting Google. Opens in browser.
-    func googleAuthUrl() async -> String? {
+    func googleAuthUrl() async -> URL? {
         guard let token = accessToken else { return nil }
-        return "\(baseURL)/auth/google?token=\(token)"
+        var components = URLComponents(string: "\(baseURL)/auth/google")
+        components?.queryItems = [URLQueryItem(name: "token", value: token)]
+        return components?.url
     }
 
     // MARK: - Private Helpers
