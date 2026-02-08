@@ -37,6 +37,30 @@ class NotchPanel: NSPanel {
 
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+
+    override func rightMouseDown(with event: NSEvent) {
+        let menu = NSMenu()
+
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        menu.addItem(.separator())
+
+        let quitItem = NSMenuItem(title: "Quit Aware", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        NSMenu.popUpContextMenu(menu, with: event, for: self.contentView!)
+    }
+
+    @objc private func openSettings() {
+        AwareSettingsWindowController.shared.showWindow()
+    }
+
+    @objc private func quitApp() {
+        NSApp.terminate(nil)
+    }
 }
 
 // MARK: - Notch Controller

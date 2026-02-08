@@ -84,14 +84,14 @@ struct AwareAccountSettings: View {
             Spacer()
 
             // MARK: Quit
-            Button(role: .destructive) {
+            Button {
                 NSApp.terminate(nil)
             } label: {
                 Label("Quit Aware", systemImage: "power")
                     .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.bordered)
             .controlSize(.large)
-            .keyboardShortcut("q", modifiers: .command)
         }
         .padding(20)
         .task { await loadGoogleStatus() }
