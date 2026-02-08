@@ -31,9 +31,8 @@ struct AwareAccountSettings: View {
                             Button("Sign Out") {
                                 Task {
                                     await auth.logout()
-                                    // Disconnect from the gateway.
-                                    await GatewayConnection.shared.shutdown()
-                                    await ControlChannel.shared.disconnect()
+                                    // Fully disconnect: stop gateway, tunnels, control channel.
+                                    await ConnectionModeCoordinator.shared.apply(mode: .unconfigured, paused: false)
                                     // Close settings and return to auth screen.
                                     AwareSettingsWindowController.shared.close()
                                     AwareAppCoordinator.shared.start()
