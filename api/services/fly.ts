@@ -110,7 +110,6 @@ export async function createMachine(appName: string, options: CreateMachineOptio
       mode: 'local',
       port: 3000,
       bind: 'lan',
-      autoApproveDevices: true,
       auth: {
         mode: 'token',
         token: options.gatewayToken,

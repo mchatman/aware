@@ -44,9 +44,10 @@ enum Aware {
         var createdAt: String?
     }
 
-    /// `GET /api/auth/me` returns `{ data: { user: {...} } }`
-    struct UserWrapper: Codable, Sendable {
+    /// `GET /api/auth/me` returns `{ user: {...}, gateway: {...} }`
+    struct MeResponse: Codable, Sendable {
         let user: User
+        let gateway: Gateway?
     }
 
     // MARK: Google

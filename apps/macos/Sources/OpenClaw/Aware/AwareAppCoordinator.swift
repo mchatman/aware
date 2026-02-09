@@ -83,6 +83,19 @@ final class AwareAppCoordinator {
         state.connectionMode = .remote
         state.remoteUrl = wsUrl
 
+        // Write the gateway token into the config so GatewayEndpointStore picks it up.
+        if let token = gateway.token {
+            var root = OpenClawConfigFile.loadDict()
+            var gw = root["gateway"] as? [String: Any] ?? [:]
+            var remote = gw["remote"] as? [String: Any] ?? [:]
+            remote["url"] = wsUrl
+            remote["token"] = token
+            gw["remote"] = remote
+            gw["mode"] = "remote"
+            root["gateway"] = gw
+            OpenClawConfigFile.saveDict(root)
+        }
+
         Task {
             await ConnectionModeCoordinator.shared.apply(mode: .remote, paused: state.isPaused)
         }

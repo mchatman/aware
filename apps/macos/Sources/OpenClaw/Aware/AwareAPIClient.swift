@@ -82,9 +82,8 @@ actor AwareAPIClient {
         ])
     }
 
-    func getMe() async throws -> Aware.User {
-        let wrapper: Aware.UserWrapper = try await get("/auth/me")
-        return wrapper.user
+    func getMe() async throws -> Aware.MeResponse {
+        try await get("/auth/me")
     }
 
     func logout() async throws {

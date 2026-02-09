@@ -49,9 +49,10 @@ final class AwareAuthManager {
 
         // Validate the token by fetching the current user.
         do {
-            let user = try await api.getMe()
-            currentUser = user
-            cacheUser(user)
+            let me = try await api.getMe()
+            currentUser = me.user
+            cacheUser(me.user)
+            gateway = me.gateway
             isAuthenticated = true
             error = nil
             log.info("Session restored via /auth/me")
