@@ -82,6 +82,7 @@ final class AwareAppCoordinator {
         let state = AppStateStore.shared
         state.connectionMode = .remote
         state.remoteUrl = wsUrl
+        state.remoteTransport = .direct
 
         // Write the gateway token into the config so GatewayEndpointStore picks it up.
         if let token = gateway.token {
@@ -90,6 +91,7 @@ final class AwareAppCoordinator {
             var remote = gw["remote"] as? [String: Any] ?? [:]
             remote["url"] = wsUrl
             remote["token"] = token
+            remote["transport"] = "direct"
             gw["remote"] = remote
             gw["mode"] = "remote"
             root["gateway"] = gw
