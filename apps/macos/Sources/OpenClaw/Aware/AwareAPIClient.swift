@@ -33,7 +33,7 @@ enum AwareAPIError: Error, Sendable, LocalizedError {
 actor AwareAPIClient {
     static let shared = AwareAPIClient()
 
-    private var baseURL: String = "https://aware-api.fly.dev"
+    private var baseURL: String = "https://aware-platform.fly.dev"
     private var accessToken: String?
 
     private let session: URLSession = {
@@ -45,13 +45,13 @@ actor AwareAPIClient {
 
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
-        d.keyDecodingStrategy = .convertFromSnakeCase
+        // Go server uses camelCase — no key conversion needed.
         return d
     }()
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
-        e.keyEncodingStrategy = .convertToSnakeCase
+        // Go server expects camelCase — no key conversion needed.
         return e
     }()
 
@@ -69,41 +69,52 @@ actor AwareAPIClient {
     // MARK: Auth
 
     func register(email: String, password: String, name: String) async throws -> Aware.AuthResponse {
-        try await post("/auth/signup", body: [
+        try await post("/api/auth/signup", body: [
             "email": email,
             "password": password,
         ])
     }
 
     func login(email: String, password: String) async throws -> Aware.AuthResponse {
-        try await post("/auth/login", body: [
+        try await post("/api/auth/login", body: [
             "email": email,
             "password": password,
         ])
     }
 
     func getMe() async throws -> Aware.MeResponse {
-        try await get("/auth/me")
+        try await get("/api/auth/me")
     }
 
     func logout() async throws {
-        let _: EmptyData = try await post("/auth/logout", body: nil)
+        let _: EmptyData = try await post("/api/auth/logout", body: nil)
+    }
+
+    // MARK: Gateway
+
+    func getGatewayStatus() async throws -> Aware.Gateway {
+        try await get("/api/gateway/status")
+    }
+
+    /// Triggers gateway provisioning. Returns immediately; poll status to wait.
+    func connectGateway() async throws {
+        let _: EmptyData = try await get("/api/gateway/connect")
     }
 
     // MARK: Google
 
     func googleStatus() async throws -> Aware.GoogleStatus {
-        try await get("/auth/google/status")
+        try await get("/api/auth/google/status")
     }
 
     func googleDisconnect() async throws {
-        let _: EmptyData = try await delete("/auth/google")
+        let _: EmptyData = try await delete("/api/auth/google")
     }
 
     /// Returns the OAuth URL for connecting Google. Opens in browser.
     func googleAuthUrl() async -> URL? {
         guard let token = accessToken else { return nil }
-        var components = URLComponents(string: "\(baseURL)/auth/google")
+        var components = URLComponents(string: "\(baseURL)/api/auth/google")
         components?.queryItems = [URLQueryItem(name: "token", value: token)]
         return components?.url
     }
@@ -185,7 +196,15 @@ actor AwareAPIClient {
 
         do {
             let wrapped = try decoder.decode(Aware.APIResponse<T>.self, from: data)
-            return wrapped.data
+            if let error = wrapped.error {
+                throw AwareAPIError.serverError(error.message)
+            }
+            guard let inner = wrapped.data else {
+                throw AwareAPIError.decodingError("Response missing 'data' field")
+            }
+            return inner
+        } catch let apiErr as AwareAPIError {
+            throw apiErr
         } catch {
             // Fallback: try decoding T directly (some endpoints may not wrap).
             do {

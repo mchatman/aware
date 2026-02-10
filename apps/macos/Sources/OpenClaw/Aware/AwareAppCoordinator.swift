@@ -3,7 +3,7 @@ import OSLog
 
 private let log = Logger(subsystem: "ai.aware", category: "coordinator")
 
-/// Coordinates the Aware app lifecycle: auth → onboarding → main app.
+/// Coordinates the Aware app lifecycle: auth → gateway provisioning → connect.
 ///
 /// Called from `AppDelegate.applicationDidFinishLaunching` instead of
 /// the default OpenClaw onboarding flow.
@@ -12,6 +12,8 @@ final class AwareAppCoordinator {
     static let shared = AwareAppCoordinator()
 
     private let auth = AwareAuthManager.shared
+    private let api = AwareAPIClient.shared
+    private var pollingTask: Task<Void, Never>?
 
     /// Entry point — call once at app launch.
     func start() {
@@ -22,8 +24,8 @@ final class AwareAppCoordinator {
             await auth.initialize()
 
             if auth.isAuthenticated {
-                log.info("Session restored — proceeding to main app")
-                enterMainApp()
+                log.info("Session restored — proceeding to gateway")
+                await proceedAfterAuth()
             } else {
                 log.info("No session — showing auth window")
                 showAuth()
@@ -37,7 +39,61 @@ final class AwareAppCoordinator {
         AwareAuthWindowController.shared.show { [weak self] in
             log.info("Auth succeeded")
             Task { @MainActor in
-                self?.enterMainApp()
+                await self?.proceedAfterAuth()
+            }
+        }
+    }
+
+    // MARK: - Post-Auth
+
+    private func proceedAfterAuth() async {
+        // Trigger gateway provisioning (creates if needed, no-op if running).
+        do {
+            try await api.connectGateway()
+        } catch {
+            log.warning("Gateway connect trigger failed: \(error.localizedDescription, privacy: .public)")
+        }
+
+        // Fetch gateway status to get endpoint + token.
+        do {
+            let gateway = try await api.getGatewayStatus()
+            auth.updateGateway(gateway)
+
+            if gateway.status == "running" {
+                log.info("Gateway is running")
+                enterMainApp()
+            } else {
+                log.info("Gateway status: \(gateway.status, privacy: .public) — polling")
+                startGatewayPolling()
+            }
+        } catch {
+            log.warning("Gateway status failed: \(error.localizedDescription, privacy: .public) — polling")
+            startGatewayPolling()
+        }
+    }
+
+    // MARK: - Gateway Polling
+
+    private func startGatewayPolling() {
+        pollingTask?.cancel()
+        pollingTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3s
+                guard !Task.isCancelled else { break }
+
+                do {
+                    let gateway = try await api.getGatewayStatus()
+                    auth.updateGateway(gateway)
+
+                    if gateway.status == "running" {
+                        log.info("Gateway is now running")
+                        enterMainApp()
+                        return
+                    }
+                    log.debug("Gateway status: \(gateway.status, privacy: .public)")
+                } catch {
+                    log.warning("Gateway poll failed: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }
@@ -45,6 +101,9 @@ final class AwareAppCoordinator {
     // MARK: - Main App
 
     private func enterMainApp() {
+        pollingTask?.cancel()
+        pollingTask = nil
+
         log.info("Entering main app")
 
         // Mark OpenClaw onboarding as seen so it never triggers.
@@ -62,41 +121,49 @@ final class AwareAppCoordinator {
     // MARK: - Gateway Connection
 
     private func connectToGateway() {
-        // If Aware auth provided gateway info, use it to connect.
-        guard let gateway = auth.gateway,
-              let endpoint = gateway.endpoint,
-              !endpoint.isEmpty,
-              gateway.status == "running" else {
-            log.info("No gateway info from auth — using existing connection mode")
+        guard let endpoint = auth.gatewayEndpoint, !endpoint.isEmpty else {
+            log.warning("No gateway endpoint — skipping connection")
             return
         }
 
-        // Convert HTTP URL to WebSocket URL for the gateway connection.
-        let wsUrl = endpoint
-            .replacingOccurrences(of: "http://", with: "ws://")
-            .replacingOccurrences(of: "https://", with: "wss://")
+        // The endpoint from the Go server is already wss://.
+        let wsUrl: String
+        if endpoint.hasPrefix("ws://") || endpoint.hasPrefix("wss://") {
+            wsUrl = endpoint
+        } else {
+            wsUrl = endpoint
+                .replacingOccurrences(of: "http://", with: "ws://")
+                .replacingOccurrences(of: "https://", with: "wss://")
+        }
 
         log.info("Connecting to gateway: \(wsUrl, privacy: .public)")
 
-        // Configure the app to connect to the gateway in direct/remote mode.
+        // Build the full URL with token for the WS proxy.
+        var connectUrl = wsUrl
+        if let token = auth.gatewayToken {
+            let sep = connectUrl.contains("?") ? "&" : "?"
+            connectUrl += "\(sep)token=\(token)"
+        }
+
+        // Write config so GatewayEndpointStore picks it up.
+        var root = OpenClawConfigFile.loadDict()
+        var gw = root["gateway"] as? [String: Any] ?? [:]
+        var remote = gw["remote"] as? [String: Any] ?? [:]
+        remote["url"] = connectUrl
+        remote["transport"] = "direct"
+        if let token = auth.gatewayToken {
+            remote["token"] = token
+        }
+        gw["remote"] = remote
+        gw["mode"] = "remote"
+        root["gateway"] = gw
+        OpenClawConfigFile.saveDict(root)
+
+        // Configure the app to connect in remote/direct mode.
         let state = AppStateStore.shared
         state.connectionMode = .remote
-        state.remoteUrl = wsUrl
+        state.remoteUrl = connectUrl
         state.remoteTransport = .direct
-
-        // Write the gateway token into the config so GatewayEndpointStore picks it up.
-        if let token = gateway.token {
-            var root = OpenClawConfigFile.loadDict()
-            var gw = root["gateway"] as? [String: Any] ?? [:]
-            var remote = gw["remote"] as? [String: Any] ?? [:]
-            remote["url"] = wsUrl
-            remote["token"] = token
-            remote["transport"] = "direct"
-            gw["remote"] = remote
-            gw["mode"] = "remote"
-            root["gateway"] = gw
-            OpenClawConfigFile.saveDict(root)
-        }
 
         Task {
             await ConnectionModeCoordinator.shared.apply(mode: .remote, paused: state.isPaused)

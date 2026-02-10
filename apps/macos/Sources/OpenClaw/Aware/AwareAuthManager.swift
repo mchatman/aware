@@ -6,6 +6,9 @@ private let log = Logger(subsystem: "ai.aware", category: "auth")
 
 private let keychainService = "ai.aware.tokens"
 private let accessTokenKey = "aware.accessToken"
+private let refreshTokenKey = "aware.refreshToken"
+private let gatewayEndpointKey = "aware.gatewayEndpoint"
+private let gatewayTokenKey = "aware.gatewayToken"
 private let currentUserDefaultsKey = "aware.currentUser"
 
 // MARK: - Auth Manager
@@ -23,6 +26,12 @@ final class AwareAuthManager {
     private(set) var gateway: Aware.Gateway?
     private(set) var isLoading: Bool = false
     var error: String?
+
+    /// The gateway WebSocket endpoint (e.g. `wss://aware-platform.fly.dev/gw/{userId}`).
+    var gatewayEndpoint: String? { gateway?.endpoint }
+
+    /// The token used to authenticate with the gateway WebSocket.
+    var gatewayToken: String? { gateway?.token }
 
     private let api = AwareAPIClient.shared
 
@@ -52,9 +61,22 @@ final class AwareAuthManager {
             let me = try await api.getMe()
             currentUser = me.user
             cacheUser(me.user)
-            gateway = me.gateway
             isAuthenticated = true
             error = nil
+
+            // Restore gateway info from keychain.
+            let storedEndpoint = loadFromKeychain(key: gatewayEndpointKey)
+            let storedGwToken = loadFromKeychain(key: gatewayTokenKey)
+            if let ep = storedEndpoint {
+                gateway = Aware.Gateway(
+                    status: "unknown",
+                    healthFailures: nil,
+                    lastHealthyAt: nil,
+                    startedAt: nil,
+                    endpoint: ep,
+                    token: storedGwToken)
+            }
+
             log.info("Session restored via /auth/me")
         } catch {
             log.warning("Session validation failed: \(error.localizedDescription, privacy: .public)")
@@ -94,6 +116,17 @@ final class AwareAuthManager {
         }
     }
 
+    /// Updates stored gateway info (called after polling gateway status).
+    func updateGateway(_ gw: Aware.Gateway) {
+        gateway = gw
+        if let ep = gw.endpoint {
+            saveToKeychain(key: gatewayEndpointKey, value: ep)
+        }
+        if let tk = gw.token {
+            saveToKeychain(key: gatewayTokenKey, value: tk)
+        }
+    }
+
     func logout() async {
         isLoading = true
         defer { isLoading = false }
@@ -113,18 +146,21 @@ final class AwareAuthManager {
 
     private func applyAuth(_ auth: Aware.AuthResponse) async {
         saveToKeychain(key: accessTokenKey, value: auth.accessToken)
+        saveToKeychain(key: refreshTokenKey, value: auth.refreshToken)
         cacheUser(auth.user)
 
         await api.setAccessToken(auth.accessToken)
 
         currentUser = auth.user
-        gateway = auth.gateway
         isAuthenticated = true
         error = nil
     }
 
     private func clearSession() {
         deleteFromKeychain(key: accessTokenKey)
+        deleteFromKeychain(key: refreshTokenKey)
+        deleteFromKeychain(key: gatewayEndpointKey)
+        deleteFromKeychain(key: gatewayTokenKey)
         UserDefaults.standard.removeObject(forKey: currentUserDefaultsKey)
 
         Task { await api.setAccessToken(nil) }
@@ -144,18 +180,14 @@ final class AwareAuthManager {
     // MARK: User Cache (UserDefaults)
 
     private func cacheUser(_ user: Aware.User) {
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        if let data = try? encoder.encode(user) {
+        if let data = try? JSONEncoder().encode(user) {
             UserDefaults.standard.set(data, forKey: currentUserDefaultsKey)
         }
     }
 
     private func restoreCachedUser() {
         guard let data = UserDefaults.standard.data(forKey: currentUserDefaultsKey) else { return }
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        currentUser = try? decoder.decode(Aware.User.self, from: data)
+        currentUser = try? JSONDecoder().decode(Aware.User.self, from: data)
     }
 
     // MARK: Keychain
