@@ -177,14 +177,21 @@ actor AwareAPIClient {
         let status = httpResponse.statusCode
         log.debug("\(method, privacy: .public) \(path, privacy: .public) → \(status)")
 
-        if status == 401 {
-            throw AwareAPIError.unauthorized
-        }
-
         if status < 200 || status >= 300 {
-            // Try to decode the structured error body.
+            // Try the Go server's envelope error: {"error": {"code": "...", "message": "..."}}
+            if let envelope = try? decoder.decode(Aware.APIResponse<EmptyData>.self, from: data),
+               let apiErr = envelope.error {
+                if status == 401 && apiErr.code == "auth/missing_token" {
+                    throw AwareAPIError.unauthorized
+                }
+                throw AwareAPIError.serverError(apiErr.message)
+            }
+            // Fallback: legacy {"error": "..."} shape.
             if let apiError = try? decoder.decode(Aware.APIErrorBody.self, from: data) {
                 throw AwareAPIError.serverError(apiError.error)
+            }
+            if status == 401 {
+                throw AwareAPIError.unauthorized
             }
             throw AwareAPIError.serverError("HTTP \(status)")
         }
